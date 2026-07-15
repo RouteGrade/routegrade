@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), ui-sans-serif, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #09090b;
+  color: #fafafa;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Pulsing start-point marker rendered by MapLibre */
+.start-marker {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.start-marker-dot {
+  position: absolute;
+  inset: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #34d399, #22d3ee);
+  box-shadow:
+    0 0 0 2px rgba(9, 9, 11, 0.9),
+    0 0 14px rgba(52, 211, 153, 0.9);
+}
+
+.start-marker-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: rgba(52, 211, 153, 0.5);
+  animation: marker-pulse 1.8s ease-out infinite;
+}
+
+@keyframes marker-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-float-in {
+  animation: float-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Distance slider */
+input[type="range"].rg-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #34d399 0%,
+    #22d3ee var(--slider-progress, 30%),
+    rgba(255, 255, 255, 0.12) var(--slider-progress, 30%),
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  outline: none;
+}
+
+input[type="range"].rg-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #fafafa;
+  border: 3px solid #34d399;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+input[type="range"].rg-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+input[type="range"].rg-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #fafafa;
+  border: 3px solid #34d399;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
+  cursor: pointer;
+}
+
+/* Keep MapLibre chrome readable on the dark style */
+.maplibregl-ctrl-attrib {
+  background: rgba(9, 9, 11, 0.7) !important;
+  backdrop-filter: blur(6px);
+}
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib a {
+  color: rgba(250, 250, 250, 0.75) !important;
+  font-size: 11px;
+}
+
+.maplibregl-ctrl-group {
+  background: rgba(24, 24, 27, 0.85) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.4);
+}
