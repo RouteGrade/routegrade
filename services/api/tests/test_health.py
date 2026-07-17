@@ -1,11 +1,9 @@
-from fastapi.testclient import TestClient
+"""Preserved MS1 health endpoint smoke test."""
 
-from main import app
-
-client = TestClient(app)
+from __future__ import annotations
 
 
-def test_health_returns_ok() -> None:
+def test_health_returns_ok(client) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "routegrade-api"}

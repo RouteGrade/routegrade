@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_user_profiles
+    description: >
+      Staging view for RouteGrade user profiles. One row per user_id; excludes
+      email and avatar_url so they do not propagate into marts.
+    columns:
+      - name: user_id
+        description: RouteGrade user ID (mirrors auth.users.id).
+        tests:
+          - unique
+          - not_null
+      - name: display_name
+        description: User-editable display name (may be null).
+      - name: auth_provider
+        description: Provider that authenticated the user.
+        tests:
+          - not_null
+          - accepted_values:
+              # Allow the test to warn (not fail) if a future provider is
+              # added upstream before this list is expanded.
+              config:
+                severity: warn
+              arguments:
+                values: ["google", "email"]
+      - name: created_at
+        description: When the profile row was first inserted.
+        tests:
+          - not_null
+      - name: updated_at
+        description: When the profile row was last synchronized.

@@ -1,10 +1,5 @@
-"""RouteGrade API — walking skeleton."""
+"""Uvicorn entry point: re-exports the FastAPI application from `app.main`."""
 
-from fastapi import FastAPI
+from app.main import app
 
-app = FastAPI(title="RouteGrade API")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "routegrade-api"}
+__all__ = ["app"]

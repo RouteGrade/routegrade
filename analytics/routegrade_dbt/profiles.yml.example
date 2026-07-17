@@ -1,0 +1,17 @@
+# Copy the block below into ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR to
+# point at a directory containing a `profiles.yml`). Never commit the populated
+# file — passwords live in env vars, not on disk.
+
+routegrade:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_POSTGRES_HOST') }}"
+      port: "{{ env_var('DBT_POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_POSTGRES_USER') }}"
+      password: "{{ env_var('DBT_POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_POSTGRES_DATABASE', 'postgres') }}"
+      schema: "{{ env_var('DBT_POSTGRES_SCHEMA', 'analytics') }}"
+      threads: 4
+      sslmode: require

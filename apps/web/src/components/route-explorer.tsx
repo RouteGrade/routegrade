@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection, LineString } from "geojson";
 import sampleRouteJson from "../fixtures/sample-route.json";
+import { RouteGradeLogo } from "./brand/route-grade-logo";
 
 const RouteMap = dynamic(() => import("./route-map"), {
   ssr: false,
@@ -85,7 +86,9 @@ function StatusPill({ status }: { status: ApiStatus }) {
   );
 }
 
-export default function RouteExplorer() {
+export default function RouteExplorer({
+  sessionNav,
+}: { sessionNav?: React.ReactNode } = {}) {
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [address, setAddress] = useState("");
   const [distanceKm, setDistanceKm] = useState(5);
@@ -183,24 +186,11 @@ export default function RouteExplorer() {
         {/* Control card */}
         <section className="rounded-2xl border border-white/10 bg-zinc-950/75 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl">
           <header className="mb-5 flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-cyan-400 shadow-lg shadow-emerald-500/30">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#09090b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                  <circle cx="6" cy="19" r="2" />
-                  <circle cx="18" cy="5" r="2" />
-                  <path d="M8 19h6.5a3.5 3.5 0 0 0 0-7h-5a3.5 3.5 0 0 1 0-7H16" />
-                </svg>
-              </span>
-              <div>
-                <h1 className="font-display text-lg font-bold tracking-tight text-white">
-                  RouteGrade
-                </h1>
-                <p className="text-[11px] leading-tight text-zinc-400">
-                  Run routes, graded.
-                </p>
-              </div>
+            <RouteGradeLogo tagline />
+            <div className="flex items-center gap-2">
+              <StatusPill status={apiStatus} />
+              {sessionNav}
             </div>
-            <StatusPill status={apiStatus} />
           </header>
 
           <form onSubmit={handleFindRoutes} className="flex flex-col gap-4">

@@ -1,0 +1,40 @@
+version: 2
+
+sources:
+  - name: routegrade_ops
+    description: >
+      RouteGrade operational database. Owned by FastAPI + Alembic.
+      dbt reads from this schema; it never writes to it.
+    database: "{{ env_var('DBT_POSTGRES_DATABASE', 'postgres') }}"
+    schema: public
+
+    tables:
+      - name: user_profiles
+        description: >
+          One row per authenticated RouteGrade user. Populated idempotently by
+          FastAPI's PUT /v1/users/me after Supabase login. Never modified by
+          dbt or the browser.
+        columns:
+          - name: user_id
+            description: Primary key; mirrors auth.users.id (Supabase).
+            tests:
+              - unique
+              - not_null
+          - name: email
+            description: >
+              Verified email from the identity token. Not exposed in analytics
+              models — see stg_user_profiles for the safe projection.
+            tests:
+              - not_null
+          - name: auth_provider
+            description: Provider that authenticated the user, e.g. `google` or `email`.
+            tests:
+              - not_null
+          - name: created_at
+            description: When the RouteGrade profile row was first inserted (TZ-aware).
+            tests:
+              - not_null
+          - name: updated_at
+            description: When any field was last synchronized.
+            tests:
+              - not_null

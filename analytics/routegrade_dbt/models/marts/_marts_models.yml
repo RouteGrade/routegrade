@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: dim_users
+    description: >
+      RouteGrade user dimension. One row per user with only analytics-safe
+      fields. No email, avatar, or display name.
+    columns:
+      - name: user_id
+        description: RouteGrade user ID.
+        tests:
+          - unique
+          - not_null
+      - name: auth_provider
+        description: Provider that authenticated the user.
+        tests:
+          - not_null
+          - accepted_values:
+              config:
+                severity: warn
+              arguments:
+                values: ["google", "email"]
+      - name: signup_at
+        description: Timestamp of first RouteGrade profile provisioning.
+        tests:
+          - not_null
+      - name: signup_date
+        description: Calendar date of signup_at (UTC).
+        tests:
+          - not_null
+      - name: last_profile_updated_at
+        description: When any field on the profile was last synchronized.
+
+  - name: fct_daily_user_signups
+    description: >
+      Daily count of new RouteGrade users, split by authentication provider.
+      One row per (signup_date, auth_provider).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - signup_date
+              - auth_provider
+    columns:
+      - name: signup_date
+        description: Calendar date (UTC) new users signed up on.
+        tests:
+          - not_null
+      - name: auth_provider
+        description: Provider used for the signup.
+        tests:
+          - not_null
+      - name: new_users
+        description: Count of distinct users signed up on that date via that provider.
+        tests:
+          - not_null

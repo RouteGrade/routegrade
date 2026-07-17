@@ -1,0 +1,30 @@
+name: "routegrade_dbt"
+version: "1.0.0"
+config-version: 2
+
+# The profile is resolved from ~/.dbt/profiles.yml (or DBT_PROFILES_DIR).
+# `profiles.yml.example` in this directory documents the expected shape.
+profile: "routegrade"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# dbt reads from `public.user_profiles` (operational) and writes to `analytics`
+# (created by dbt on first run). Staging is a view; the small marts are views
+# too — we deliberately avoid materializing tables for a tiny user table.
+models:
+  routegrade_dbt:
+    +materialized: view
+    staging:
+      +schema: staging
+    marts:
+      +schema: marts
