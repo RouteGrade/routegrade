@@ -30,3 +30,61 @@ models:
           - not_null
       - name: updated_at
         description: When the profile row was last synchronized.
+
+  - name: stg_saved_routes
+    description: >
+      Staging view for saved routes. One row per route_id; excludes
+      starting_address (PII) and geometry (bulky, no aggregate use) so neither
+      propagates into marts.
+    columns:
+      - name: route_id
+        description: Saved route ID (planner-issued UUID).
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: Owning RouteGrade user.
+        tests:
+          - not_null
+      - name: distance_km
+        description: Real distance of the generated geometry.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: preference
+        description: Requested vibe.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["quiet", "flat", "scenic"]
+      - name: elevation_gain_m
+        description: Total climb in metres.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: score
+        description: Numeric score, 0-100.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: grade
+        description: Letter grade.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["A", "B", "C", "D"]
+      - name: created_at
+        description: When the route was first saved.
+        tests:
+          - not_null

@@ -30,6 +30,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.db.models.saved_route import SavedRoute  # noqa: E402
 from app.db.models.user_profile import UserProfile  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -107,6 +108,7 @@ def _make_test_engine():
         poolclass=StaticPool,
     ).execution_options(schema_translate_map={"public": None})
     UserProfile.__table__.create(bind=engine)
+    SavedRoute.__table__.create(bind=engine)
     return engine
 
 
@@ -134,6 +136,9 @@ def app_with_overrides(jwks_dict: dict[str, Any]):
 
     # Stub JWKS so no real HTTP call happens during tests.
     app.state.jwks_client = StubJWKSClient(jwks_dict)
+
+    # Disable /plan rate limiting by default; rate-limit tests install their own.
+    app.state.plan_rate_limiter = None
 
     # Use a fresh in-memory SQLite for each test.
     engine = _make_test_engine()

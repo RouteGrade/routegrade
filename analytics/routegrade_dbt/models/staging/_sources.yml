@@ -38,3 +38,58 @@ sources:
             description: When any field was last synchronized.
             tests:
               - not_null
+
+      - name: saved_routes
+        description: >
+          One row per route a signed-in user saved. Written by FastAPI's
+          PUT /v1/users/me/routes/:id. Contains PII (starting_address) and
+          bulky geometry — both are dropped in stg_saved_routes and must never
+          reach a mart.
+        columns:
+          - name: id
+            description: Primary key; planner-issued route UUID.
+            tests:
+              - unique
+              - not_null
+          - name: user_id
+            description: Owning user; mirrors auth.users.id (Supabase).
+            tests:
+              - not_null
+          - name: name
+            description: User-visible route name (1-120 chars).
+            tests:
+              - not_null
+          - name: starting_address
+            description: >
+              Address as the user typed it. PII — excluded from staging and all
+              downstream models.
+          - name: distance_km
+            description: Real distance of the generated geometry.
+            tests:
+              - not_null
+          - name: preference
+            description: Requested vibe — quiet / flat / scenic.
+            tests:
+              - not_null
+          - name: geometry
+            description: GeoJSON LineString (JSONB). Excluded from staging.
+          - name: elevation_gain_m
+            description: Total climb in metres.
+            tests:
+              - not_null
+          - name: score
+            description: Numeric score (0-100) from scoring function v1.
+            tests:
+              - not_null
+          - name: grade
+            description: Letter grade A/B/C/D derived from the score.
+            tests:
+              - not_null
+          - name: created_at
+            description: When the route was first saved (TZ-aware).
+            tests:
+              - not_null
+          - name: updated_at
+            description: When the saved route was last replaced.
+            tests:
+              - not_null

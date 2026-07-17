@@ -4,10 +4,14 @@ RouteGrade is a quality and safety layer for running routes. It will eventually
 score streets and trails using factors such as traffic, lighting, sidewalk
 continuity, elevation, scenery, surface, intersections, and reported safety.
 
-**Milestone status:** MVP 2 — authentication (Supabase), typed FastAPI user API,
-operational schema managed with Alembic + SQLAlchemy 2, and a dbt analytics
-project. The MVP 1 walking skeleton (map + route form + health proxy) is
-preserved and remains publicly accessible without login.
+**Milestone status:** MVP 3 — real route generation. The map form geocodes a
+real address, generates loop candidates from the OSM road graph via OSRM,
+grades them with scoring v1 (elevation + intersections + sidewalks — see
+`docs/scoring.md`), and signed-in users can save routes and revisit them from
+`/account`. Everything from MVP 2 (Supabase auth, typed FastAPI user API,
+Alembic + SQLAlchemy 2, dbt) is preserved, and the MVP 1 public route
+experience still works without login — planning is public, saving requires
+sign-in.
 
 ## Architecture
 
@@ -97,23 +101,27 @@ routegrade/
 ├── services/
 │   └── api/                          # FastAPI (uv-managed, SQLAlchemy 2)
 │       ├── app/
-│       │   ├── api/routes/users.py   # /v1/users/me
+│       │   ├── api/routes/           # users.py, plans.py, saved_routes.py
 │       │   ├── auth/                 # JWKS + JWT dependency + claims
 │       │   ├── core/config.py        # typed pydantic-settings
 │       │   ├── db/                   # engine, session, models
-│       │   ├── repositories/         # user_profiles
+│       │   ├── providers/            # geocoding, OSRM routing, elevation
+│       │   ├── repositories/         # user_profiles, saved_routes
 │       │   ├── schemas/              # request/response models
-│       │   └── services/             # provisioning
+│       │   └── services/             # provisioning, scoring, route_planner
 │       ├── alembic/                  # operational migrations
-│       └── tests/                    # pytest — auth + endpoint coverage
+│       └── tests/                    # pytest — auth, planning, saved routes
 ├── analytics/
 │   └── routegrade_dbt/               # dbt project (dbt-postgres)
 ├── db/                               # (reserved)
 ├── docs/
-│   └── supabase-setup.md             # step-by-step provider configuration
+│   ├── supabase-setup.md             # step-by-step provider configuration
+│   ├── routing-setup.md              # MVP 3 providers + Phase 0 decisions
+│   └── scoring.md                    # scoring v1 weights and limits
 ├── milestones/
 │   ├── MS1.md
-│   └── MS2.md
+│   ├── MS2.md
+│   └── MS3.md
 └── pipelines/                        # (reserved)
 ```
 
@@ -152,6 +160,14 @@ commit real secrets.
 | `SUPABASE_JWT_AUDIENCE` | Expected `aud` claim (default `authenticated`) |
 | `SUPABASE_JWT_ALGORITHMS` | Allow-list of algorithms (default `RS256,ES256`) |
 | `CORS_ORIGINS` | Comma-separated allow-list |
+| `GEOCODER_BASE_URL` / `GEOCODER_USER_AGENT` | Nominatim-compatible geocoder (MVP 3) |
+| `OSRM_BASE_URL` / `OSRM_PROFILE` | OSRM routing engine (MVP 3) |
+| `ELEVATION_BASE_URL` | Open-Elevation-compatible endpoint (MVP 3) |
+| `PROVIDER_TIMEOUT_SECONDS` | Outbound provider call timeout |
+| `ROUTE_PLAN_DISTANCE_TOLERANCE` | Accepted ±deviation from requested distance (default 0.10) |
+
+All provider variables have keyless public defaults good for local development
+only — see `docs/routing-setup.md` before any real traffic.
 
 ### dbt
 
@@ -184,7 +200,9 @@ cd services/api
 uv run uvicorn main:app --reload
 ```
 
-Health: <http://127.0.0.1:8000/health> · Users API prefix: `/v1/users`.
+Health: <http://127.0.0.1:8000/health> · Users API prefix: `/v1/users` ·
+Route planning: `POST /v1/routes/plan` (public) · Saved routes:
+`GET/PUT/DELETE /v1/users/me/routes[/:id]` (Bearer).
 
 ### 3. Frontend — terminal 2
 
@@ -255,6 +273,11 @@ is configured.
   externally-configured.
 - `dbt build` requires a reachable PostgreSQL — parse and compile succeed
   offline, but the full run needs a live database.
+- `/v1/routes/plan` has **no rate limiting yet** and the default providers are
+  public demo endpoints (the OSRM demo only routes the `driving` profile).
+  Both must be addressed before public launch — see `docs/routing-setup.md`.
+- Sidewalk coverage is scored neutrally in v1 (no Overpass integration yet) —
+  see `docs/scoring.md`.
 
 ## Tile-provider warning
 

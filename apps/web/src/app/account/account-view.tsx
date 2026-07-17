@@ -11,6 +11,7 @@ import {
   updateDisplayName,
   type UserProfile,
 } from "@/lib/api/authenticated-client";
+import { SavedRoutesSection } from "./saved-routes-section";
 
 type LoadState =
   | { kind: "loading" }
@@ -200,6 +201,8 @@ export function AccountView() {
                 </p>
               )}
             </form>
+
+            <SavedRoutesSection />
 
             <p className="mt-6 text-xs text-zinc-500">
               <Link href="/" className="text-emerald-400 hover:text-emerald-300">

@@ -56,6 +56,50 @@ class Settings(BaseSettings):
         description="Comma-separated list of allowed origins",
     )
 
+    # Route planning providers (MVP 3). Defaults point at public, keyless
+    # OSM-ecosystem endpoints so local dev works out of the box; production
+    # should self-host OSRM and (optionally) Nominatim — see
+    # docs/routing-setup.md for the Phase 0 decision record.
+    geocoder_base_url: str = Field(
+        default="https://nominatim.openstreetmap.org",
+        description="Nominatim-compatible geocoding endpoint",
+    )
+    geocoder_user_agent: str = Field(
+        default="RouteGrade/0.1 (routegrade-api)",
+        description="User-Agent sent to the geocoder (required by Nominatim's usage policy)",
+    )
+    osrm_base_url: str = Field(
+        default="https://router.project-osrm.org",
+        description="OSRM HTTP API base URL",
+    )
+    osrm_profile: str = Field(
+        default="foot",
+        description=(
+            "OSRM routing profile. Self-hosted OSRM should use `foot`; the public "
+            "demo server only serves `driving`."
+        ),
+    )
+    elevation_base_url: str = Field(
+        default="https://api.open-elevation.com",
+        description="Open-Elevation-compatible elevation endpoint",
+    )
+    provider_timeout_seconds: float = Field(
+        default=10.0,
+        description="Per-request timeout for outbound provider HTTP calls",
+    )
+    route_plan_distance_tolerance: float = Field(
+        default=0.10,
+        description="Accepted relative deviation between requested and generated distance",
+    )
+    route_plan_rate_limit_per_minute: int = Field(
+        default=10,
+        description="Sustained per-IP requests/minute on /v1/routes/plan; 0 disables limiting",
+    )
+    route_plan_rate_limit_burst: int = Field(
+        default=5,
+        description="Extra burst headroom above the sustained rate",
+    )
+
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:

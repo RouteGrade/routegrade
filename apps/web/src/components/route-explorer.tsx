@@ -1,9 +1,20 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { FeatureCollection, LineString } from "geojson";
-import sampleRouteJson from "../fixtures/sample-route.json";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import type { LineString } from "geojson";
+import {
+  ApiError,
+} from "@/lib/api/authenticated-client";
+import {
+  getSavedRoute,
+  planRoute,
+  saveRoute,
+  type PlanResponse,
+  type PlannedRoute,
+  type Preference,
+} from "@/lib/api/routes-client";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
 
 const RouteMap = dynamic(() => import("./route-map"), {
@@ -15,10 +26,9 @@ const RouteMap = dynamic(() => import("./route-map"), {
   ),
 });
 
-const sampleRoute = sampleRouteJson as FeatureCollection<LineString>;
-
 type ApiStatus = "checking" | "online" | "offline";
-type Preference = "quiet" | "flat" | "scenic";
+
+const PACE_MIN_PER_KM = 6;
 
 const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = [
   {
@@ -55,17 +65,6 @@ const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = 
   },
 ];
 
-function haversineKm(a: [number, number], b: [number, number]): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(b[1] - a[1]);
-  const dLng = toRad(b[0] - a[0]);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
 function StatusPill({ status }: { status: ApiStatus }) {
   const config = {
     checking: { dot: "bg-amber-400", ring: "bg-amber-400/40", label: "Checking API…" },
@@ -86,17 +85,44 @@ function StatusPill({ status }: { status: ApiStatus }) {
   );
 }
 
+function GradeBadge({ grade }: { grade: string }) {
+  return (
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-lime-400 font-display text-lg font-extrabold text-zinc-950 shadow-lg shadow-emerald-500/30">
+      {grade}
+    </span>
+  );
+}
+
+type ActiveRoute = {
+  route: PlannedRoute;
+  /** Address text to persist when saving. */
+  startingAddress: string | null;
+  saved: boolean;
+};
+
 export default function RouteExplorer({
   sessionNav,
-}: { sessionNav?: React.ReactNode } = {}) {
+  isAuthenticated = false,
+  savedRouteId,
+}: {
+  sessionNav?: React.ReactNode;
+  isAuthenticated?: boolean;
+  savedRouteId?: string;
+} = {}) {
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [address, setAddress] = useState("");
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [distanceKm, setDistanceKm] = useState(5);
   const [preference, setPreference] = useState<Preference>("quiet");
   const [searching, setSearching] = useState(false);
-  const [showRoute, setShowRoute] = useState(false);
   const [locating, setLocating] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [reopened, setReopened] = useState<ActiveRoute | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,65 +145,152 @@ export default function RouteExplorer({
     };
   }, []);
 
+  // Reopen a saved route linked from /account (?route=<id>).
   useEffect(() => {
+    if (!savedRouteId || !isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await getSavedRoute(savedRouteId);
+        if (cancelled) return;
+        setReopened({
+          route: {
+            id: saved.id,
+            name: saved.name,
+            geometry: saved.geometry,
+            distance_km: saved.distance_km,
+            elevation_gain_m: saved.elevation_gain_m,
+            intersections_per_km: 0,
+            sidewalk_coverage: null,
+            score: saved.score,
+            grade: saved.grade,
+            within_tolerance: true,
+            provider: "saved",
+          },
+          startingAddress: saved.starting_address,
+          saved: true,
+        });
+        if (saved.starting_address) setAddress(saved.starting_address);
+        setDistanceKm(Math.min(15, Math.max(1, Math.round(saved.distance_km * 2) / 2)));
+        setPreference(saved.preference);
+        setSavedIds((prev) => new Set(prev).add(saved.id));
+      } catch {
+        // Deleted or someone else's link — quietly fall back to a fresh planner.
+      }
+    })();
     return () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
+      cancelled = true;
     };
-  }, []);
+  }, [savedRouteId, isAuthenticated]);
 
-  const routeStats = useMemo(() => {
-    const coords = sampleRoute.features[0].geometry.coordinates as [number, number][];
-    let km = 0;
-    for (let i = 1; i < coords.length; i++) {
-      km += haversineKm(coords[i - 1], coords[i]);
-    }
-    const paceMinPerKm = 6;
-    const minutes = Math.round(km * paceMinPerKm);
-    const props = sampleRoute.features[0].properties ?? {};
-    return {
-      name: (props.name as string) ?? "Sample route",
-      km: km.toFixed(1),
-      minutes,
-      elevation: (props.elevationGainM as number) ?? 0,
-      grade: (props.grade as string) ?? "A-",
-    };
-  }, []);
+  const active: ActiveRoute | null = plan
+    ? {
+        route: plan.routes[Math.min(activeIndex, plan.routes.length - 1)],
+        startingAddress: address.trim() || plan.start.label,
+        saved: false,
+      }
+    : reopened;
+
+  const activeGeometry: LineString | null = active
+    ? { type: "LineString", coordinates: active.route.geometry.coordinates }
+    : null;
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {
-      setAddress("Location unavailable");
+      setPlanError("Location is unavailable in this browser.");
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
+        setCoords({ latitude, longitude });
         setAddress(`Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
         setLocating(false);
       },
       () => {
-        setAddress("Location unavailable");
+        setPlanError("We couldn't read your location. Type an address instead.");
         setLocating(false);
       },
       { timeout: 8000 },
     );
   };
 
-  const handleFindRoutes = (event: React.FormEvent) => {
+  const handleFindRoutes = async (event: React.FormEvent) => {
     event.preventDefault();
     if (searching) return;
+
+    const trimmed = address.trim();
+    const usingCoords = coords !== null && trimmed.startsWith("Current location (");
+    if (!trimmed && !usingCoords) {
+      setPlanError("Enter a starting address or use your location.");
+      return;
+    }
+
     setSearching(true);
-    searchTimer.current = setTimeout(() => {
+    setPlanError(null);
+    setSaveError(null);
+    try {
+      const response = await planRoute({
+        ...(usingCoords
+          ? { latitude: coords.latitude, longitude: coords.longitude, address: trimmed }
+          : { address: trimmed }),
+        distance_km: distanceKm,
+        preference,
+      });
+      setPlan(response);
+      setActiveIndex(0);
+      setReopened(null);
+    } catch (err) {
+      setPlan(null);
+      if (err instanceof ApiError && err.status === 404) {
+        setPlanError("We couldn't find that address. Try being more specific.");
+      } else if (err instanceof ApiError && err.status === 429) {
+        setPlanError("You're planning routes quickly — give it a few seconds and try again.");
+      } else if (err instanceof ApiError && err.status === 502) {
+        setPlanError("Route providers are unavailable right now. Please try again shortly.");
+      } else {
+        setPlanError("Something went wrong while planning. Please try again.");
+      }
+    } finally {
       setSearching(false);
-      setShowRoute(true);
-    }, 900);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!active || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveRoute(active.route.id, {
+        name: active.route.name,
+        starting_address: active.startingAddress,
+        distance_km: active.route.distance_km,
+        preference,
+        geometry: active.route.geometry,
+        elevation_gain_m: active.route.elevation_gain_m,
+        score: active.route.score,
+        grade: active.route.grade,
+      });
+      setSavedIds((prev) => new Set(prev).add(active.route.id));
+    } catch (err) {
+      setSaveError(
+        err instanceof ApiError && err.status === 401
+          ? "Your session expired — sign in again to save."
+          : "Couldn't save this route. Please try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sliderProgress = ((distanceKm - 1) / (15 - 1)) * 100;
+  const activeSaved = active ? active.saved || savedIds.has(active.route.id) : false;
+  const estMinutes = active ? Math.round(active.route.distance_km * PACE_MIN_PER_KM) : 0;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-zinc-950">
-      <RouteMap showRoute={showRoute} />
+      <RouteMap geometry={activeGeometry} />
 
       {/* Top vignette for legibility */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-linear-to-b from-zinc-950/80 to-transparent" />
@@ -210,7 +323,10 @@ export default function RouteExplorer({
                   id="start-address"
                   type="text"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setCoords(null);
+                  }}
                   placeholder="Nathan Phillips Square, Toronto"
                   className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-2 focus:ring-emerald-400/20"
                 />
@@ -308,35 +424,67 @@ export default function RouteExplorer({
                 </>
               )}
             </button>
+
+            {planError && (
+              <p role="alert" className="text-xs text-rose-400">
+                {planError}
+              </p>
+            )}
           </form>
         </section>
 
         {/* Route result card */}
-        {showRoute && (
+        {active && (
           <section className="animate-float-in rounded-2xl border border-white/10 bg-zinc-950/75 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
+            {plan && plan.routes.length > 1 && (
+              <div className="mb-3 flex gap-1.5" role="tablist" aria-label="Route candidates">
+                {plan.routes.map((candidate, index) => (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={index === activeIndex}
+                    onClick={() => setActiveIndex(index)}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition ${
+                      index === activeIndex
+                        ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300"
+                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                    }`}
+                  >
+                    {candidate.grade} · {candidate.distance_km.toFixed(1)} km
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h2 className="truncate font-display text-sm font-bold text-white">
-                    {routeStats.name}
+                    {active.route.name}
                   </h2>
-                  <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                    Sample
-                  </span>
+                  {active.route.provider === "saved" ? (
+                    <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                      Saved
+                    </span>
+                  ) : !active.route.within_tolerance ? (
+                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                      Off target
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-0.5 text-[11px] text-zinc-400">
-                  Scoring arrives in Milestone 2 — this grade is a preview.
+                  Graded from elevation, intersections &amp; sidewalk data.
                 </p>
               </div>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-lime-400 font-display text-lg font-extrabold text-zinc-950 shadow-lg shadow-emerald-500/30">
-                {routeStats.grade}
-              </span>
+              <GradeBadge grade={active.route.grade} />
             </div>
+
             <dl className="mt-3 grid grid-cols-3 gap-1.5 text-center">
               {[
-                { label: "Distance", value: `${routeStats.km} km` },
-                { label: "Est. time", value: `${routeStats.minutes} min` },
-                { label: "Elevation", value: `${routeStats.elevation} m` },
+                { label: "Distance", value: `${active.route.distance_km.toFixed(1)} km` },
+                { label: "Est. time", value: `${estMinutes} min` },
+                { label: "Elevation", value: `${Math.round(active.route.elevation_gain_m)} m` },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-xl border border-white/10 bg-white/5 py-2">
                   <dt className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -348,6 +496,46 @@ export default function RouteExplorer({
                 </div>
               ))}
             </dl>
+
+            <div className="mt-3">
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || activeSaved}
+                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition ${
+                    activeSaved
+                      ? "cursor-default border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                      : "bg-linear-to-r from-emerald-400 to-cyan-400 text-zinc-950 shadow-lg shadow-emerald-500/20 hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                  }`}
+                >
+                  {activeSaved ? (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      Saved to your account
+                    </>
+                  ) : saving ? (
+                    "Saving…"
+                  ) : (
+                    "Save this route"
+                  )}
+                </button>
+              ) : (
+                <Link
+                  href="/login?next=/"
+                  className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                >
+                  Sign in to save this route
+                </Link>
+              )}
+              {saveError && (
+                <p role="alert" className="mt-2 text-xs text-rose-400">
+                  {saveError}
+                </p>
+              )}
+            </div>
           </section>
         )}
       </div>

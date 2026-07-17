@@ -54,3 +54,92 @@ models:
         description: Count of distinct users signed up on that date via that provider.
         tests:
           - not_null
+
+  - name: dim_routes
+    description: >
+      Saved-route dimension. One row per saved route with analytics-safe
+      fields only — no starting address, geometry, or route name.
+    columns:
+      - name: route_id
+        description: Saved route ID.
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: Owning user; joins to dim_users.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: preference
+        description: Requested vibe.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["quiet", "flat", "scenic"]
+      - name: distance_bucket
+        description: Coarse distance band for reporting.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - "short (<3 km)"
+                  - "medium (3-7 km)"
+                  - "long (7-12 km)"
+                  - "very long (12+ km)"
+      - name: grade
+        description: Letter grade at save time.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["A", "B", "C", "D"]
+      - name: provider
+        description: Routing engine that produced the geometry.
+        tests:
+          - not_null
+      - name: saved_at
+        description: Timestamp the route was saved.
+        tests:
+          - not_null
+      - name: saved_date
+        description: Calendar date (UTC) of saved_at.
+        tests:
+          - not_null
+      - name: signup_at
+        description: Owning user's signup timestamp (from dim_users).
+
+  - name: fct_route_scores_daily
+    description: >
+      Daily distribution of saved-route grades. One row per (saved_date, grade)
+      with counts and mean distance / score / climb.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - saved_date
+              - grade
+    columns:
+      - name: saved_date
+        description: Calendar date (UTC) routes were saved on.
+        tests:
+          - not_null
+      - name: grade
+        description: Letter grade bucket.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["A", "B", "C", "D"]
+      - name: routes_saved
+        description: Count of routes saved that day with that grade.
+        tests:
+          - not_null
+      - name: avg_distance_km
+        description: Mean route distance for the bucket.
+      - name: avg_score
+        description: Mean numeric score for the bucket.
+      - name: avg_elevation_gain_m
+        description: Mean climb for the bucket.

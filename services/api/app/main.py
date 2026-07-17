@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.plans import router as plans_router
+from app.api.routes.saved_routes import router as saved_routes_router
 from app.api.routes.users import router as users_router
 from app.core.config import get_settings
 from app.db.session import dispose
@@ -35,6 +37,8 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": "routegrade-api"}
 
     app.include_router(users_router)
+    app.include_router(plans_router)
+    app.include_router(saved_routes_router)
     return app
 
 

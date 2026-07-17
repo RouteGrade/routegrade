@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export type UserProfile = {
   user_id: string;
@@ -40,7 +40,7 @@ async function getAccessToken(): Promise<string> {
   return session.access_token;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -60,6 +60,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       // ignore body parse
     }
     throw new ApiError(res.status, detail);
+  }
+  if (res.status === 204) {
+    return undefined as T;
   }
   return (await res.json()) as T;
 }
