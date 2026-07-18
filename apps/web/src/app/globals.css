@@ -41,6 +41,55 @@ body {
   animation: marker-pulse 1.8s ease-out infinite;
 }
 
+/* Glowing tip that leads the route while it draws itself */
+.tip-marker {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.tip-marker::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(163, 230, 53, 0.55) 0%,
+    rgba(52, 211, 153, 0.25) 45%,
+    transparent 70%
+  );
+  animation: tip-glow 1.1s ease-in-out infinite alternate;
+}
+
+.tip-marker::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 9999px;
+  background: #fafafa;
+  box-shadow:
+    0 0 0 2px rgba(163, 230, 53, 0.9),
+    0 0 12px rgba(163, 230, 53, 0.9);
+}
+
+.tip-marker-done {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+@keyframes tip-glow {
+  from {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+}
+
 @keyframes marker-pulse {
   0% {
     transform: scale(0.6);
@@ -109,6 +158,19 @@ input[type="range"].rg-slider::-moz-range-thumb {
   border: 3px solid #34d399;
   box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
   cursor: pointer;
+}
+
+/* Bigger slider thumb on touch screens — 18px is too fiddly for fingers */
+@media (pointer: coarse) {
+  input[type="range"].rg-slider::-webkit-slider-thumb {
+    width: 26px;
+    height: 26px;
+  }
+
+  input[type="range"].rg-slider::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+  }
 }
 
 /* Keep MapLibre chrome readable on the dark style */

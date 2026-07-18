@@ -14,8 +14,16 @@ const ROUTE_SOURCE = "active-route";
 const ROUTE_LAYERS = ["route-glow", "route-line"] as const;
 
 // Camera settles first, then the route draws itself from start to finish.
-const FIT_DURATION_MS = 900;
-const DRAW_DURATION_MS = 1600;
+const FIT_DURATION_MS = 1400;
+// Breather between the camera settling and the line starting to draw.
+const DRAW_DELAY_MS = 350;
+// Draw pacing scales with route length so long loops don't zip by,
+// clamped so short strolls still feel deliberate and long runs don't drag.
+const DRAW_MIN_MS = 3200;
+const DRAW_MAX_MS = 6000;
+const DRAW_MS_PER_KM = 450;
+// Rough km per planar degree around mid latitudes — only used to pace the draw.
+const KM_PER_DEGREE = 95;
 
 type Coord = [number, number];
 
@@ -59,8 +67,9 @@ function partialLine(coords: Coord[], distances: number[], target: number): Coor
   return out;
 }
 
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+/** Gentler than cubic — the line eases in softly and coasts to a stop. */
+function easeInOutSine(t: number): number {
+  return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
 export type RouteMapProps = {
@@ -72,6 +81,7 @@ export default function RouteMap({ geometry }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const tipMarkerRef = useRef<maplibregl.Marker | null>(null);
   const styleReadyRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const drawTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +171,7 @@ export default function RouteMap({ geometry }: RouteMapProps) {
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
+      tipMarkerRef.current = null;
       styleReadyRef.current = false;
     };
   }, []);
@@ -196,6 +207,8 @@ export default function RouteMap({ geometry }: RouteMapProps) {
 
       markerRef.current?.remove();
       markerRef.current = null;
+      tipMarkerRef.current?.remove();
+      tipMarkerRef.current = null;
 
       if (!visible) {
         source.setData(lineStringData([]));
@@ -216,10 +229,16 @@ export default function RouteMap({ geometry }: RouteMapProps) {
         new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
       );
       const desktop = window.matchMedia("(min-width: 640px)").matches;
+      // On phones the bottom sheet covers the lower part of the screen, so
+      // reserve a slice of the viewport for it — clamped so tiny/landscape
+      // screens never get padding bigger than the map itself.
+      const mapHeight = map.getContainer().clientHeight;
+      const sheetPadding = Math.max(150, Math.min(330, Math.round(mapHeight * 0.42)));
       map.fitBounds(bounds, {
         padding: desktop
           ? { top: 90, bottom: 90, left: 440, right: 80 }
-          : { top: 60, bottom: 220, left: 40, right: 40 },
+          : { top: 64, bottom: sheetPadding, left: 36, right: 36 },
+        maxZoom: 16,
         duration: FIT_DURATION_MS,
         essential: true,
       });
@@ -233,11 +252,16 @@ export default function RouteMap({ geometry }: RouteMapProps) {
       }
 
       // Draw from the starting point toward the end once the camera has
-      // (mostly) settled. rAF only mutates source data, so panning, zooming,
-      // and every control stay fully usable while the line grows.
+      // settled. rAF only mutates source data, so panning, zooming, and
+      // every control stay fully usable while the line grows.
       source.setData(lineStringData([]));
       const distances = cumulativeDistances(coordinates);
       const total = distances[distances.length - 1];
+      const roughKm = total * KM_PER_DEGREE;
+      const drawDuration = Math.min(
+        DRAW_MAX_MS,
+        Math.max(DRAW_MIN_MS, roughKm * DRAW_MS_PER_KM),
+      );
 
       drawTimerRef.current = setTimeout(() => {
         drawTimerRef.current = null;
@@ -245,22 +269,39 @@ export default function RouteMap({ geometry }: RouteMapProps) {
           source.setData(lineStringData(coordinates));
           return;
         }
+
+        // Glowing tip leads the line while it draws, then fades away.
+        const tipElement = document.createElement("div");
+        tipElement.className = "tip-marker";
+        const tipMarker = new maplibregl.Marker({ element: tipElement })
+          .setLngLat(coordinates[0])
+          .addTo(map);
+        tipMarkerRef.current = tipMarker;
+
         let startedAt: number | null = null;
         const frame = (now: number) => {
           if (startedAt === null) startedAt = now;
-          const progress = Math.min(1, (now - startedAt) / DRAW_DURATION_MS);
-          const eased = easeInOutCubic(progress);
-          source.setData(
-            lineStringData(partialLine(coordinates, distances, eased * total)),
-          );
+          const progress = Math.min(1, (now - startedAt) / drawDuration);
+          const eased = easeInOutSine(progress);
+          const partial = partialLine(coordinates, distances, eased * total);
+          source.setData(lineStringData(partial));
+          tipMarker.setLngLat(partial[partial.length - 1]);
           if (progress < 1) {
             animationFrameRef.current = requestAnimationFrame(frame);
           } else {
             animationFrameRef.current = null;
+            tipElement.classList.add("tip-marker-done");
+            drawTimerRef.current = setTimeout(() => {
+              drawTimerRef.current = null;
+              if (tipMarkerRef.current === tipMarker) {
+                tipMarker.remove();
+                tipMarkerRef.current = null;
+              }
+            }, 600);
           }
         };
         animationFrameRef.current = requestAnimationFrame(frame);
-      }, FIT_DURATION_MS);
+      }, FIT_DURATION_MS + DRAW_DELAY_MS);
     };
 
     if (styleReadyRef.current) {

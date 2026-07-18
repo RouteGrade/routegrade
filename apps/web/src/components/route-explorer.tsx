@@ -123,6 +123,9 @@ export default function RouteExplorer({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reopened, setReopened] = useState<ActiveRoute | null>(null);
+  // Mobile-only: the planner form collapses into a bottom-sheet header so the
+  // map stays visible. Ignored on sm+ where the form is always shown.
+  const [formOpen, setFormOpen] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +177,9 @@ export default function RouteExplorer({
         setDistanceKm(Math.min(15, Math.max(1, Math.round(saved.distance_km * 2) / 2)));
         setPreference(saved.preference);
         setSavedIds((prev) => new Set(prev).add(saved.id));
+        if (window.matchMedia("(max-width: 639px)").matches) {
+          setFormOpen(false);
+        }
       } catch {
         // Deleted or someone else's link — quietly fall back to a fresh planner.
       }
@@ -241,6 +247,10 @@ export default function RouteExplorer({
       setPlan(response);
       setActiveIndex(0);
       setReopened(null);
+      // On phones, tuck the form away so the map and result take the stage.
+      if (window.matchMedia("(max-width: 639px)").matches) {
+        setFormOpen(false);
+      }
     } catch (err) {
       setPlan(null);
       if (err instanceof ApiError && err.status === 404) {
@@ -292,21 +302,50 @@ export default function RouteExplorer({
     <div className="relative h-full w-full overflow-hidden bg-zinc-950">
       <RouteMap geometry={activeGeometry} />
 
-      {/* Top vignette for legibility */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-linear-to-b from-zinc-950/80 to-transparent" />
+      {/* Vignettes for legibility — top on desktop, bottom behind the mobile sheet */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-zinc-950/80 to-transparent sm:block" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-linear-to-t from-zinc-950/80 to-transparent sm:hidden" />
 
-      <div className="absolute inset-x-3 top-3 flex max-h-[calc(100dvh-1.5rem)] flex-col gap-3 overflow-y-auto sm:inset-x-auto sm:left-5 sm:top-5 sm:w-[380px]">
+      {/* Bottom sheet on phones (results stacked above the controls),
+          fixed left column on sm+ */}
+      <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col-reverse gap-2 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100dvh-2.5rem)] sm:w-[380px] sm:flex-col sm:gap-3 sm:p-0">
         {/* Control card */}
-        <section className="rounded-2xl border border-white/10 bg-zinc-950/75 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl">
-          <header className="mb-5 flex items-start justify-between gap-3">
+        <section className="rounded-2xl border border-white/10 bg-zinc-950/75 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-5">
+          <header
+            className={`flex items-center justify-between gap-3 ${formOpen ? "mb-5" : "mb-0"} sm:mb-5 sm:items-start`}
+          >
             <RouteGradeLogo tagline />
             <div className="flex items-center gap-2">
               <StatusPill status={apiStatus} />
               {sessionNav}
+              <button
+                type="button"
+                onClick={() => setFormOpen((open) => !open)}
+                aria-expanded={formOpen}
+                aria-controls="planner-form"
+                aria-label={formOpen ? "Hide route options" : "Show route options"}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 sm:hidden"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`h-4 w-4 transition-transform duration-300 ${formOpen ? "rotate-180" : ""}`}
+                >
+                  <path d="m6 15 6-6 6 6" />
+                </svg>
+              </button>
             </div>
           </header>
 
-          <form onSubmit={handleFindRoutes} className="flex flex-col gap-4">
+          <form
+            id="planner-form"
+            onSubmit={handleFindRoutes}
+            className={`flex-col gap-4 ${formOpen ? "flex" : "hidden"} sm:flex`}
+          >
             <div>
               <label
                 htmlFor="start-address"
@@ -328,7 +367,7 @@ export default function RouteExplorer({
                     setCoords(null);
                   }}
                   placeholder="Nathan Phillips Square, Toronto"
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-2 focus:ring-emerald-400/20"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 text-base text-white placeholder:text-zinc-500 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-2 focus:ring-emerald-400/20 sm:text-sm"
                 />
               </div>
               <button
