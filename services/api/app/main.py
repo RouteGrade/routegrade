@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.plans import router as plans_router
+from app.api.routes.runs import router as runs_router
 from app.api.routes.saved_routes import router as saved_routes_router
 from app.api.routes.users import router as users_router
 from app.core.config import get_settings
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(plans_router)
     app.include_router(saved_routes_router)
+    app.include_router(runs_router)
     return app
 
 

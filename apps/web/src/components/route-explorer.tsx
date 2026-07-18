@@ -16,6 +16,8 @@ import {
   type Preference,
 } from "@/lib/api/routes-client";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
+import RunTracker, { primeSpeech } from "./run-tracker";
+import type { RunTelemetry } from "./run-tracker";
 
 const RouteMap = dynamic(() => import("./route-map"), {
   ssr: false,
@@ -126,6 +128,9 @@ export default function RouteExplorer({
   // Mobile-only: the planner form collapses into a bottom-sheet header so the
   // map stays visible. Ignored on sm+ where the form is always shown.
   const [formOpen, setFormOpen] = useState(true);
+  // Live run mode: the planner UI hides and RunTracker takes over the screen.
+  const [runMode, setRunMode] = useState(false);
+  const [runTelemetry, setRunTelemetry] = useState<RunTelemetry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -298,16 +303,22 @@ export default function RouteExplorer({
   const activeSaved = active ? active.saved || savedIds.has(active.route.id) : false;
   const estMinutes = active ? Math.round(active.route.distance_km * PACE_MIN_PER_KM) : 0;
 
+  const handleStartRun = () => {
+    primeSpeech(); // unlock speech synthesis while we still have a user gesture
+    setRunMode(true);
+  };
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-zinc-950">
-      <RouteMap geometry={activeGeometry} />
+      <RouteMap geometry={activeGeometry} runner={runTelemetry} follow={runMode} />
 
       {/* Vignettes for legibility — top on desktop, bottom behind the mobile sheet */}
       <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-zinc-950/80 to-transparent sm:block" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-linear-to-t from-zinc-950/80 to-transparent sm:hidden" />
 
       {/* Bottom sheet on phones (results stacked above the controls),
-          fixed left column on sm+ */}
+          fixed left column on sm+. Hidden entirely while a run is live. */}
+      {!runMode && (
       <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col-reverse gap-2 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100dvh-2.5rem)] sm:w-[380px] sm:flex-col sm:gap-3 sm:p-0">
         {/* Control card */}
         <section className="rounded-2xl border border-white/10 bg-zinc-950/75 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-5">
@@ -536,16 +547,26 @@ export default function RouteExplorer({
               ))}
             </dl>
 
-            <div className="mt-3">
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleStartRun}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/25 transition hover:shadow-emerald-400/40 hover:brightness-110 active:scale-[0.98]"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
+                </svg>
+                Start run
+              </button>
               {isAuthenticated ? (
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving || activeSaved}
-                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition ${
+                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition ${
                     activeSaved
                       ? "cursor-default border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                      : "bg-linear-to-r from-emerald-400 to-cyan-400 text-zinc-950 shadow-lg shadow-emerald-500/20 hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                      : "border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
                   }`}
                 >
                   {activeSaved ? (
@@ -578,6 +599,24 @@ export default function RouteExplorer({
           </section>
         )}
       </div>
+      )}
+
+      {runMode && active && (
+        <RunTracker
+          route={{
+            id: active.route.id,
+            name: active.route.name,
+            geometry: active.route.geometry,
+            distance_km: active.route.distance_km,
+          }}
+          isAuthenticated={isAuthenticated}
+          onExit={() => {
+            setRunMode(false);
+            setRunTelemetry(null);
+          }}
+          onTelemetry={setRunTelemetry}
+        />
+      )}
     </div>
   );
 }

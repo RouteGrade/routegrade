@@ -11,4 +11,4 @@ class Base(DeclarativeBase):
 
 # Importing models here ensures they are registered on `Base.metadata` when
 # something imports `app.db.base` (e.g. Alembic env, tests).
-from app.db.models import user_profile  # noqa: E402, F401
+from app.db.models import run, saved_route, user_profile  # noqa: E402, F401

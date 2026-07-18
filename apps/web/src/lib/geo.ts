@@ -1,0 +1,109 @@
+/**
+ * Geospatial helpers for live run tracking.
+ *
+ * Everything works on [longitude, latitude] pairs (GeoJSON order) and uses
+ * real-world meters (haversine / local equirectangular), unlike the planar
+ * degrees the map's draw animation uses — pace math needs true distances.
+ */
+
+export type LngLat = [number, number];
+
+const EARTH_RADIUS_M = 6_371_000;
+
+function toRad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+/** Great-circle distance between two points, in meters. */
+export function haversineMeters(a: LngLat, b: LngLat): number {
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Total length of a path in meters. */
+export function pathLengthMeters(coords: LngLat[]): number {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineMeters(coords[i - 1], coords[i]);
+  }
+  return total;
+}
+
+/**
+ * Project `point` onto the polyline, in a local equirectangular frame (fine
+ * for the sub-km scales of a run). Returns the distance from the point to the
+ * route in meters and how far along the route the closest spot is.
+ */
+export function projectOntoPath(
+  point: LngLat,
+  coords: LngLat[],
+): { distanceToPathM: number; alongPathM: number } {
+  const cosLat = Math.cos(toRad(point[1]));
+  const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M;
+  const mPerDegLng = mPerDegLat * cosLat;
+
+  const px = point[0] * mPerDegLng;
+  const py = point[1] * mPerDegLat;
+
+  let best = Number.POSITIVE_INFINITY;
+  let bestAlong = 0;
+  let cumulative = 0;
+
+  for (let i = 1; i < coords.length; i++) {
+    const ax = coords[i - 1][0] * mPerDegLng;
+    const ay = coords[i - 1][1] * mPerDegLat;
+    const bx = coords[i][0] * mPerDegLng;
+    const by = coords[i][1] * mPerDegLat;
+    const segX = bx - ax;
+    const segY = by - ay;
+    const segLen2 = segX * segX + segY * segY;
+    const t = segLen2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * segX + (py - ay) * segY) / segLen2)) : 0;
+    const cx = ax + segX * t;
+    const cy = ay + segY * t;
+    const dist = Math.hypot(px - cx, py - cy);
+    const segLen = Math.sqrt(segLen2);
+    if (dist < best) {
+      best = dist;
+      bestAlong = cumulative + segLen * t;
+    }
+    cumulative += segLen;
+  }
+
+  return { distanceToPathM: best, alongPathM: bestAlong };
+}
+
+/** "5:42" from seconds-per-km; em dash when pace is meaningless. */
+export function formatPace(secondsPerKm: number | null): string {
+  if (secondsPerKm === null || !Number.isFinite(secondsPerKm) || secondsPerKm <= 0) {
+    return "—:—";
+  }
+  const clamped = Math.min(secondsPerKm, 59 * 60 + 59);
+  const min = Math.floor(clamped / 60);
+  const sec = Math.round(clamped % 60);
+  return sec === 60 ? `${min + 1}:00` : `${min}:${String(sec).padStart(2, "0")}`;
+}
+
+/** "42:07" or "1:02:07" from total seconds. */
+export function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 1, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Spoken form of a pace for audio cues: "5 minutes 42 seconds per kilometer". */
+export function spokenPace(secondsPerKm: number): string {
+  const min = Math.floor(secondsPerKm / 60);
+  const sec = Math.round(secondsPerKm % 60);
+  if (min === 0) return `${sec} seconds per kilometer`;
+  if (sec === 0) return `${min} minutes per kilometer`;
+  return `${min} minutes ${sec} seconds per kilometer`;
+}

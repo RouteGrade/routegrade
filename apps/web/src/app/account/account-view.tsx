@@ -11,6 +11,7 @@ import {
   updateDisplayName,
   type UserProfile,
 } from "@/lib/api/authenticated-client";
+import { RunsSection } from "./runs-section";
 import { SavedRoutesSection } from "./saved-routes-section";
 
 type LoadState =
@@ -202,6 +203,7 @@ export function AccountView() {
               )}
             </form>
 
+            <RunsSection />
             <SavedRoutesSection />
 
             <p className="mt-6 text-xs text-zinc-500">
