@@ -13,6 +13,47 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 19:03 (run 7, cron)
+- **Did**: Two workstreams.
+  1. **Cleanup**: two heartbeat branches — `doc-staleness` (README truth-up
+     + `milestones/MS5.md`) and `ms6-kickoff` (dbt runs models, GitHub
+     Actions CI, GPS trace cap tests) — had been sitting un-merged since
+     runs 2 and 3, so `main` still says "MVP 3" on `README.md:7` and has no
+     CI. Rebased both cleanly on top of latest main and pushed as
+     `heartbeat/2026-07-21-doc-staleness-rebased` and
+     `heartbeat/2026-07-21-ms6-kickoff-rebased`. Both verified locally
+     (ms6-kickoff-rebased: 120 tests pass, ruff clean; doc-staleness is
+     docs-only). Force-push is prohibited by heartbeat guardrails, hence
+     the new branch names — founder should merge the `-rebased` versions
+     and can delete the originals.
+  2. **New feature (Phase C P2)**: staff-engineer built the `route_plans`
+     cache table + planner integration. Alembic migration 0005; transparent
+     cache keyed on bucketed post-geocoded coordinates + preference (~110m
+     bucket at Toronto latitude, matches OSRM's ±5% loop tolerance);
+     fail-safe on any DB error (logs + falls through to normal planning);
+     versioned `v1|` prefix in the key so future payload-shape changes can
+     invalidate all entries with a bump. Cache placed AFTER geocoding so
+     user-supplied address text is never a key or a stored value. Ships
+     enabled by default. Branch `heartbeat/2026-07-21-route-plans-cache`,
+     commit `729fc62`, pushed.
+- **Verified**: services/api tests 136 passed (was 118, +18 new for the
+  cache: hit/miss, distinct buckets, expired-treated-as-miss, poison
+  avoidance on ProviderError, fail-safe DB errors, per-preference key
+  separation, endpoint-level cache hit). Ruff clean.
+- **Queued**: PENDING_APPROVALS.md #1 updated to note that the pending
+  migration run now covers both `0004_create_rate_limit_buckets` and
+  `0005_create_route_plans_cache` in a single `alembic upgrade head`. Both
+  are additive-only and safe to run any time.
+- **Blocked on founder**:
+  - Apply Alembic migrations 0004 + 0005 → prod (single command).
+  - Merge queued branches:
+    `heartbeat/2026-07-21-doc-staleness-rebased`,
+    `heartbeat/2026-07-21-ms6-kickoff-rebased`,
+    `heartbeat/2026-07-21-route-plans-cache`.
+    The old un-rebased branches (`doc-staleness`, `ms6-kickoff`) can be
+    deleted after their -rebased replacements land.
+  - OSRM foot-profile host + tile provider key (deferred MVP 6 items).
+
 ## 2026-07-21 18:43 (run 6c, founder-triggered — sign-in fixed, day close-out)
 - **Did**: Diagnosed "Google sign-in still redirects to localhost". Fetched
   the deployed Next.js client bundle from prod, grepped for `localhost:3000`,

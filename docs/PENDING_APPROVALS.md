@@ -22,14 +22,17 @@ Entry format:
 
 ## Founder actions needed
 
-### 1. Apply Alembic migration 0004 to production DB (rate limiter activation)
-The Postgres-backed rate limiter is deployed but the `rate_limit_buckets`
-table it needs doesn't exist in production yet — migration
-`services/api/alembic/versions/20260721_0004_create_rate_limit_buckets.py`
-was added on branch `heartbeat/2026-07-21-prod-fixes` (now on main) but no
-`alembic upgrade head` has run against prod. Symptom: smoke test check 10
-(rate-limit wired) still fails because the limiter is currently failing
-open on every DB error.
+### 1. Apply Alembic migrations 0004 + 0005 to production DB
+Two additive migrations need to run against prod:
+
+- `0004_create_rate_limit_buckets` — Postgres-backed rate limiter (fails
+  open until this table exists; smoke test check 10 currently fails for
+  this reason).
+- `0005_create_route_plans_cache` — planner cache table. The cache is
+  enabled by default in code (`ROUTE_PLAN_CACHE_ENABLED=true`) and fails
+  safe on any DB error, so nothing breaks if the table is missing — but
+  until it exists, every `/plan` request still fans out to Nominatim +
+  OSRM + Open-Elevation instead of reusing a computed route.
 
 **Fix — run against production DATABASE_URL:**
 ```
@@ -37,10 +40,10 @@ cd services/api && DATABASE_URL="<prod url>" uv run alembic upgrade head
 ```
 
 The prod DATABASE_URL is the Supabase project's pooler connection string —
-see the Vercel `routegrade-api` project's environment variables. Migration
-is additive (only creates a table) and safe to run any time. After it
-completes, re-run `bash scripts/smoke-test.sh` — rate-limit check should
-flip from FAIL to PASS.
+see the Vercel `routegrade-api` project's environment variables. Both
+migrations are additive (only create tables + indexes) and safe to run any
+time. After completion, re-run `bash scripts/smoke-test.sh` — rate-limit
+check should flip from FAIL to PASS.
 
 While you're in there, also apply `0003_create_runs` if it hasn't been
 applied yet — the runs endpoints are live in prod (smoke test confirms

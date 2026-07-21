@@ -21,8 +21,6 @@ API deployments both current.
 - [ ] P2 Tile provider style URL behind env var (OpenFreeMap default for dev),
   attribution component — owner: staff-engineer (activation blocked
   `[founder]` API key; Phase B blocker)
-- [ ] P2 `route_plans` cache table (Alembic additive migration) keyed on
-  `(start, distance, preference)` — owner: staff-engineer
 - [ ] P2 Error tracking + uptime monitoring (Sentry free tier + health
   pinger), alert path documented — owner: devops-engineer (may need
   `[founder]` Sentry account)
@@ -59,6 +57,17 @@ API deployments both current.
 
 ## Done
 
+- [x] P2 route_plans cache table + planner integration — additive migration
+  0005, transparent cache keyed on bucketed post-geocoded coordinates +
+  preference, ships enabled by default, fail-safe on DB errors, +18 new
+  tests (2026-07-21 run 7, staff-engineer; branch
+  `heartbeat/2026-07-21-route-plans-cache`)
+- [x] CLEANUP Rebase stale un-merged branches — `doc-staleness` and
+  `ms6-kickoff` re-based on latest main; pushed as
+  `heartbeat/2026-07-21-doc-staleness-rebased` and
+  `heartbeat/2026-07-21-ms6-kickoff-rebased`. Both build clean; MS6-kickoff
+  now brings tests from 118 → 120 with GPS trace cap tests, and doc-
+  staleness ships README truth-up + `milestones/MS5.md` (2026-07-21 run 7)
 - [x] CRITICAL Diagnose "sign-in still redirects to localhost" — verified
   code fix landed in prod HTML (no localhost URLs in client bundle);
   identified Supabase Site URL fallback as the actual load-bearing setting;
