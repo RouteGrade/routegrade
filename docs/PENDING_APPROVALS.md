@@ -22,118 +22,65 @@ Entry format:
 
 ## Founder actions needed
 
-These are approved but physically require the founder's accounts/dashboards.
-The heartbeat implements everything code-side behind env vars in the meantime.
+### 1. Apply Alembic migration 0004 to production DB (rate limiter activation)
+The Postgres-backed rate limiter is deployed but the `rate_limit_buckets`
+table it needs doesn't exist in production yet — migration
+`services/api/alembic/versions/20260721_0004_create_rate_limit_buckets.py`
+was added on branch `heartbeat/2026-07-21-prod-fixes` (now on main) but no
+`alembic upgrade head` has run against prod. Symptom: smoke test check 10
+(rate-limit wired) still fails because the limiter is currently failing
+open on every DB error.
 
-### 1. Supabase Auth URL configuration (CRITICAL — Google sign-in broken)
-**This is the root cause.** Our web code correctly requests
-`redirectTo: https://routegrade-web.vercel.app/auth/callback`, but Supabase
-ignores it because that URL is not in the project's Redirect URLs allowlist.
-Supabase then falls back to its project **Site URL**, which is currently
-`http://localhost:3000`. User lands at `http://localhost:3000/?code=<uuid>#`
-and Safari (or any browser not running a local dev server) can't reach it.
-
-**Fix — Supabase dashboard, ~2 minutes:**
-1. https://supabase.com/dashboard → RouteGrade project
-2. **Authentication → URL Configuration**
-3. **Site URL**: change from `http://localhost:3000` to
-   `https://routegrade-web.vercel.app`
-4. **Redirect URLs**: add both entries (leave any existing localhost ones
-   for local dev):
-   - `https://routegrade-web.vercel.app/auth/callback`
-   - `https://routegrade-web.vercel.app/**` (wildcard for the `next=` param)
-5. Save. Takes effect immediately — no redeploy, no cache clear needed.
-
-Code side is already done (branch merged; verified in prod HTML — no
-localhost URLs bake into the client bundle). This dashboard setting is the
-only remaining blocker for Google sign-in.
-
-### 1b. Fix Vercel deploy for routegrade-api (URGENT — API stuck at MVP 4)
-The build failure is now known: Vercel introduced a **FastAPI framework
-preset** that auto-detects FastAPI apps. Actual build log:
+**Fix — run against production DATABASE_URL:**
 ```
-Error: No FastAPI entrypoint found in default locations, but found
-potential entrypoints:
-  services/api/api/index.py (variable: app)
-  services/api/app/main.py (variable: app)
-  services/api/main.py (variable: app)
+cd services/api && DATABASE_URL="<prod url>" uv run alembic upgrade head
 ```
-Two conditions caused the failure together:
-1. Vercel's Root Directory is at the repo root, not `services/api`, so the
-   preset can't find a `main.py` in a "default location" (the project root).
-2. Three files exported `app`, so even if Root Directory were fixed, the
-   preset had no unambiguous entrypoint to pick.
 
-Code fix (branch `heartbeat/2026-07-21-vercel-fastapi-fix`, commit
-`473fe6d`, pushed): removed `services/api/api/index.py` (redundant Vercel
-serverless stub) and simplified `services/api/vercel.json` to
-`{"framework": "fastapi"}`. Now only `services/api/main.py` and
-`services/api/app/main.py` remain — with Root Directory set correctly, the
-preset finds `main.py` at project root unambiguously.
+The prod DATABASE_URL is the Supabase project's pooler connection string —
+see the Vercel `routegrade-api` project's environment variables. Migration
+is additive (only creates a table) and safe to run any time. After it
+completes, re-run `bash scripts/smoke-test.sh` — rate-limit check should
+flip from FAIL to PASS.
 
-**Founder actions to complete the fix**:
-1. Merge `heartbeat/2026-07-21-vercel-fastapi-fix` into main.
-2. In Vercel dashboard → `routegrade-api` project → Settings → General:
-   verify **Root Directory** is `services/api`. If it isn't, set it.
-3. Settings → Git: verify repo connection to `RouteGrade/routegrade`,
-   Production Branch = `main`. Clear any Ignored Build Step that might
-   return exit 0.
-4. Deployments → Redeploy on latest main (uncheck "Use existing Build
-   Cache" for a clean build).
-5. Re-run `scripts/smoke-test.sh` — the /v1/users/me/runs check should
-   flip from 404 to 401 (endpoint exists, needs auth).
-
-**Exact click path**:
-1. https://vercel.com/dashboard → RouteGrade team → project **`routegrade-api`**
-   (id `prj_YlDO1pBAQ3Crb3CZdgfnUAXiXfmn`, NOT `routegrade-web`)
-2. **Settings → Git**: verify repo connection to `RouteGrade/routegrade` and
-   that Production Branch = `main`. Reconnect if it shows disconnected.
-3. Under **Ignored Build Step**: confirm it is empty OR set to a command
-   returning exit code `1` (build). If a custom script returns `0`, that's
-   almost certainly the bug — clear it.
-4. Under **Root Directory**: confirm `services/api`.
-5. **Deployments** tab: click **Redeploy** on the latest main commit with
-   "Use existing Build Cache" **unchecked** to force a clean build.
-6. If step 5 fails at build time, capture the log and we can fix it code-side.
-   Fallback CLI: `cd services/api && vercel --prod` (project link already in
-   `.vercel/project.json`).
-
-After the deploy succeeds, merge the queued branches (recommended order:
-`prod-fixes` last — it already includes `c-config-prep`, so `c-config-prep`
-can be dropped or merged first and the merge into main will fast-forward).
-Then re-run `scripts/smoke-test.sh` — checks should go 15/15.
+While you're in there, also apply `0003_create_runs` if it hasn't been
+applied yet — the runs endpoints are live in prod (smoke test confirms
+401), which suggests either the table already exists or it will be needed
+the moment a real user tries to save a run.
 
 ### 2. OSRM `foot`-profile host
 Approved 2026-07-21 (part of MVP 6 phase C). Needs an always-on host for the
-Ontario-extract OSRM instance (`docs/routing-setup.md` has the build steps) —
-e.g. a small VPS (Hetzner/DO, ~$5-10/mo) or Fly.io. Once up, set
-`OSRM_BASE_URL` + `OSRM_PROFILE=foot` in Vercel env. The heartbeat will have
-config/code ready so cutover is env-vars-only.
+Ontario-extract OSRM instance (see `docs/OSRM_CUTOVER_RUNBOOK.md`) — e.g. a
+small VPS (Hetzner/DO, ~$5-10/mo) or Fly.io. Once up, set `OSRM_BASE_URL` +
+`OSRM_PROFILE=foot` in Vercel env. Cutover is env-vars-only; code side is
+already validated on a real local Toronto OSRM.
 
-### 3. Upstash Redis (rate limiting) — NO LONGER URGENT
-Approved 2026-07-21. **Update 2026-07-21 run 6**: heartbeat added a
-Postgres-backed rate-limiter backend on branch
-`heartbeat/2026-07-21-prod-fixes` that uses the existing Supabase database
-via `DATABASE_URL` (already set in Vercel). Priority is Redis > Postgres >
-in-memory — so when the branch is merged and the API redeploys, cross-
-instance rate limiting works automatically with zero founder action, no
-new paid vendor. Upstash is now an **optional** higher-throughput upgrade,
-not a blocker. Leave this queued if you want to opt in later.
+### 3. Upstash Redis — OPTIONAL, not urgent
+Approved 2026-07-21. Postgres backend covers cross-instance rate limiting
+already; Upstash is a higher-throughput upgrade only. Skip unless traffic
+grows enough that Postgres round-trips per request become measurable
+overhead.
 
 ### 4. Hosted tile provider
 Approved 2026-07-21. Pick MapTiler or Stadia Maps (both have free tiers),
-create an API key, set it in Vercel env. Heartbeat wires the style URL behind
-an env var with the current OpenFreeMap default for local dev.
+create an API key, set it in Vercel env. Blocks the Phase B public route
+pages (public traffic on OpenFreeMap is forbidden per the README).
 
 ## Approved
 
-- **2026-07-21 — MVP 6 scope: ALL THREE (A+B+C)**, order C → A → B. Moved to
+- **2026-07-21 — Supabase Auth URL configuration (Site URL +
+  Redirect URLs allowlist)** — completed by founder; Google sign-in
+  verified working. Corresponds to run 6c.
+- **2026-07-21 — Vercel routegrade-api deploy** — Vercel dashboard fix +
+  code-side single-entrypoint refactor landed; API redeployed successfully.
+  Smoke test confirms `/v1/users/me/runs` returns 401 (MVP 5 live).
+  Corresponds to runs 6b and prior deploy work.
+- **2026-07-21 — MVP 6 scope: ALL THREE (A+B+C)**, order C → A → B. In
   `DECISIONS.md`; full option text in git history (`7132c6a`) and
   `milestones/MS6.md`.
 - **2026-07-21 — Self-hosted OSRM `foot` profile** — subsumed into MVP 6-C;
   founder action #2 above.
 - **2026-07-21 — Redis/Upstash rate limiting** — subsumed into MVP 6-C;
-  founder action #3 above.
+  founder action #3 above (now optional after Postgres backend shipped).
 - **2026-07-21 — Hosted tile provider** — subsumed into MVP 6-C; founder
   action #4 above.
 

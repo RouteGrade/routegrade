@@ -13,6 +13,43 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 18:43 (run 6c, founder-triggered — sign-in fixed, day close-out)
+- **Did**: Diagnosed "Google sign-in still redirects to localhost". Fetched
+  the deployed Next.js client bundle from prod, grepped for `localhost:3000`,
+  and confirmed the code-side fix IS working (the fallback path returns
+  `window.location.origin` in-browser). Root cause was elsewhere: Supabase
+  itself was overriding our requested `redirectTo` because our production
+  URL wasn't in its Redirect URLs allowlist, so Supabase fell back to its
+  project **Site URL**, which was still `http://localhost:3000`. That's a
+  Supabase-dashboard setting we can't touch from code. Wrote the exact
+  click path in `PENDING_APPROVALS.md`; founder applied it; Google sign-in
+  now works end-to-end.
+- **Also cleaned up**: state files reconciled to reflect production reality.
+  Ran full smoke test (14/15 pass — only failing check is rate limiter,
+  because Postgres migration 0004 for `rate_limit_buckets` still needs to
+  be applied against the prod DB). Backlog "Now" list re-prioritized around
+  what's actually blocked vs unblocked. Approvals file updated: three items
+  moved from "founder actions needed" to "approved" (Supabase auth URL,
+  Vercel API deploy, MVP 5 live), Upstash entry downgraded to optional,
+  new entry raised for the migration.
+- **Verified via smoke test against prod**: `/health` 200 ok; `/login` renders
+  Google + email sign-in with zero localhost URLs; `/auth/callback` returns
+  307; `POST /v1/routes/plan` returns 3 graded routes; invalid payload
+  returns 422; CORS preflight correct; all three authenticated endpoints
+  return 401 without a token (including `/v1/users/me/runs` — MVP 5 is
+  live). Only rate limiter fails.
+- **Queued**: (P1) apply Alembic migration 0004 against prod DB — one
+  command against the prod DATABASE_URL will flip the last smoke check to
+  green.
+- **Blocked on founder** (much shorter list now):
+  - Apply migration 0004 → prod (PENDING_APPROVALS #1).
+  - OSRM foot-profile host + tile provider key (deferred MVP 6 items, not
+    urgent).
+- **Outstanding heartbeat branches**: `heartbeat/2026-07-21-doc-staleness`,
+  `heartbeat/2026-07-21-ms6-kickoff`, `heartbeat/2026-07-21-single-entrypoint`
+  are still un-merged. First two contain material code + docs; third is
+  cleanup that's no longer urgent since prod is fine.
+
 ## 2026-07-21 17:55 (run 6b, founder-triggered — Vercel build error surfaced)
 - **Did**: Founder shared the Vercel deploy URL that was failing. Actual
   error was `No FastAPI entrypoint found in default locations` with three
