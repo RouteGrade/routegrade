@@ -22,8 +22,6 @@ provisioning; heartbeat should pull from Next.)*
 - [ ] P2 Error tracking + uptime monitoring (Sentry free tier + health
   pinger), alert path documented — owner: devops-engineer (may need
   `[founder]` Sentry account)
-- [ ] P2 Scripted post-deploy smoke test (health, live plan, CORS, auth
-  callback, save + run persist) — owner: qa-lead
 - [ ] P2 Run-tracker regression suite via `?simulate=1` — owner: qa-engineer
 
 ## Later (Phase A, then Phase B — expand when phases open)
@@ -47,6 +45,14 @@ provisioning; heartbeat should pull from Next.)*
 
 ## Done
 
+- [x] P2 Production smoke test script + docs — 15 unauthenticated checks
+  including an explicit "no localhost in login HTML" guard for the auth
+  bug that motivated the task; script ran against production and surfaced
+  two real issues (see log) (2026-07-21 run 5, qa-lead; branch
+  `heartbeat/2026-07-21-smoke-test`)
+- [x] EMERGENCY Fix web auth redirecting to localhost (founder-triggered;
+  2026-07-21 mid-session; branch
+  `heartbeat/2026-07-21-fix-auth-localhost-fallback`)
 - [x] P1 Redis/Upstash rate-limit backend + coverage extension to runs +
   saved-routes writes + XFF-bypass fix + race-safe upserts on both repos
   (2026-07-21 run 4, staff-engineer; branch

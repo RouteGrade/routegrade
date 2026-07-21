@@ -13,6 +13,44 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 16:01 (run 5, cron)
+- **Did**: qa-lead built a production smoke test at `scripts/smoke-test.sh`
+  with 15 unauthenticated checks (curl + jq only, no secrets). Notably
+  includes an explicit "no localhost URLs in the /login HTML" guard —
+  exactly the failure mode the founder hit earlier in the session. Docs at
+  `docs/SMOKE_TEST.md`. On branch
+  `heartbeat/2026-07-21-smoke-test` (commit `546ec1c`, pushed, NOT merged).
+  This run also caught up the backlog Done section with the earlier
+  founder-triggered auth-localhost fix branch, which was missing.
+- **Verified**: qa-lead ran the smoke test against actual production
+  (`routegrade-web.vercel.app` + `routegrade-api.vercel.app`) —
+  **13 passed, 2 failed** — full output preserved in the review that
+  authorized this commit. The auth-callback-URL guard PASSED against prod
+  (production is fine now).
+- **Two real production issues surfaced by the smoke test (queued):**
+  1. **`/v1/users/me/runs` returns 404 on production** — the deployed API
+     is pre-MVP-5. The MVP 5 run-tracking router exists in the repo but was
+     never actually deployed. Live run tracking has been shipping a UI
+     against an endpoint that isn't there. Filed as PENDING_APPROVALS #1b
+     (URGENT — founder needs to trigger a Vercel API deploy).
+  2. **Rate limiter never returned 429** on a 25-burst against
+     `/v1/routes/plan` — the documented "per-instance" limiter is spread
+     across Vercel serverless instances, so a single-client burst against
+     a scaled fleet effectively never trips. Not a new bug — this is
+     exactly what the Upstash approval item exists to fix
+     (`PENDING_APPROVALS.md` #3, code side already shipped on
+     `heartbeat/2026-07-21-c-config-prep`).
+- **Queued**: nothing new beyond the two production findings above.
+- **Blocked on founder** (five branches now queued for merge, plus deploy):
+  - `heartbeat/2026-07-21-doc-staleness` — README truth-up + MS5
+  - `heartbeat/2026-07-21-ms6-kickoff` — dbt runs models + CI + security cap
+  - `heartbeat/2026-07-21-c-config-prep` — Redis backend + OSRM runbook
+  - `heartbeat/2026-07-21-fix-auth-localhost-fallback` — auth localhost fix
+  - `heartbeat/2026-07-21-smoke-test` — this run's smoke test
+  - **Then trigger a Vercel API deploy** to bring MVP 5 endpoints live.
+  - Supabase redirect allow-list (still open), Upstash creds, OSRM host,
+    tile provider key — all still queued in PENDING_APPROVALS.md.
+
 ## 2026-07-21 14:05 (run 4, founder-triggered)
 - **Did**: Two more Phase C P1s in parallel on branch
   `heartbeat/2026-07-21-c-config-prep` (commit `3a78c79`, pushed, NOT merged).
