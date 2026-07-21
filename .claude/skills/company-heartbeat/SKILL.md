@@ -65,6 +65,11 @@ Delegate to the matching agent (subagent types are registered from the repo's
 `.claude/agents/`, which points at `agents/`):
 
 - Planning/specs → **head-of-product**; architecture questions → **cto**
+- Revenue, monetization, productization, positioning → **head-of-growth**
+- Speculative ideas / new directions → **creative-director** (proposals only —
+  never let this role touch the plan, code, or approvals directly; its output
+  is a `docs/PROPOSALS/*.md` doc that must be reviewed by 2+ high-order
+  agents. See `agents/creative-director.md` for the flow.)
 - Schema/migrations/analytics → **director-of-data**
 - Implementation → the appropriate engineer; builds → **devops-engineer**
 - Cleanup → **platform-engineer**; docs → **technical-writer**

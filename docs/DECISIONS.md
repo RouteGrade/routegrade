@@ -3,6 +3,26 @@
 Written record of every company-level decision (see `agents/ceo.md` for the
 decision process). Newest first.
 
+## Decision: Hire Head of Growth and Creative Director
+- **Date**: 2026-07-21
+- **Decision**: Added two new agent roles:
+  - **head-of-growth** — drives revenue, monetization, productization,
+    distribution; standard exec-level role alongside CEO/CTO/Head of Product.
+  - **creative-director** — generates speculative ideas and new directions.
+    Bound by a hard governance constraint: ideas are PROPOSALS ONLY, live in
+    `docs/PROPOSALS/`, and only land in the plan after endorsement from two
+    or more high-order agents (CEO always + one of CTO / Head of Product /
+    Head of Growth / Director of Data). The role cannot edit backlog,
+    decisions, code, or the founder-approvals queue directly.
+- **Rationale**: Company was engineering-heavy and had no dedicated revenue
+  role and no sanctioned space for divergent ideas. Founder directed both
+  hires in the same turn. The review constraint on creative-director keeps
+  divergent thinking on the org without letting it destabilize execution.
+- **Effort budget**: n/a (structural)
+- **Owner**: ceo (delegation) — see updated `agents/ceo.md` delegation table
+- **Revisit by**: 2026-10-21 (check whether either role has produced work
+  that has actually landed in the plan)
+
 ## Decision: MVP 6 scope — ALL THREE options (A + B + C)
 - **Date**: 2026-07-21
 - **Decision**: Founder approved implementing all three proposed MVP 6 scopes:
