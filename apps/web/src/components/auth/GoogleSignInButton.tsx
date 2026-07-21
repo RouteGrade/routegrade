@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+import { getSiteUrl } from "@/lib/site-url";
 
 export function GoogleSignInButton({ next }: { next?: string }) {
   const [busy, setBusy] = useState(false);
@@ -17,7 +16,7 @@ export function GoogleSignInButton({ next }: { next?: string }) {
       const supabase = createSupabaseBrowserClient();
       const params = new URLSearchParams();
       if (next) params.set("next", next);
-      const redirectTo = `${SITE_URL}/auth/callback${params.toString() ? `?${params}` : ""}`;
+      const redirectTo = `${getSiteUrl()}/auth/callback${params.toString() ? `?${params}` : ""}`;
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo },

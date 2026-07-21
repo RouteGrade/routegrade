@@ -2,8 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+import { getSiteUrl } from "@/lib/site-url";
 
 type Status = "idle" | "sending" | "sent";
 
@@ -28,7 +27,7 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
       const supabase = createSupabaseBrowserClient();
       const params = new URLSearchParams();
       if (next) params.set("next", next);
-      const emailRedirectTo = `${SITE_URL}/auth/callback${params.toString() ? `?${params}` : ""}`;
+      const emailRedirectTo = `${getSiteUrl()}/auth/callback${params.toString() ? `?${params}` : ""}`;
       const { error: err } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: { emailRedirectTo },
