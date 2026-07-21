@@ -143,3 +143,106 @@ models:
         description: Mean numeric score for the bucket.
       - name: avg_elevation_gain_m
         description: Mean climb for the bucket.
+
+  - name: dim_runs
+    description: >
+      Recorded-run dimension. One row per run with analytics-safe fields only
+      — no GPS trace, splits, or route name.
+    columns:
+      - name: run_id
+        description: Recorded run ID.
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: Owning user; joins to dim_users.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_id
+      - name: route_id
+        description: >
+          Saved route the run followed, when any. Loose pointer — warns (not
+          fails) on runs whose route was later deleted.
+        tests:
+          - relationships:
+              config:
+                severity: warn
+              arguments:
+                to: ref('dim_routes')
+                field: route_id
+      - name: followed_saved_route
+        description: True when the run was recorded against a saved route.
+        tests:
+          - not_null
+      - name: distance_km
+        description: Recorded distance in km.
+        tests:
+          - not_null
+      - name: distance_bucket
+        description: Coarse distance band for reporting.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - "short (<3 km)"
+                  - "medium (3-7 km)"
+                  - "long (7-12 km)"
+                  - "very long (12+ km)"
+      - name: duration_s
+        description: Total elapsed run time in seconds.
+        tests:
+          - not_null
+      - name: pace_s_per_km
+        description: >
+          Seconds per km — client-reported average, or derived from
+          duration/distance. Null for zero-distance runs.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: started_at
+        description: Timestamp the run started.
+        tests:
+          - not_null
+      - name: run_date
+        description: Calendar date (UTC) of started_at.
+        tests:
+          - not_null
+      - name: signup_at
+        description: Owning user's signup timestamp (from dim_users).
+
+  - name: fct_runs_daily
+    description: >
+      Daily run activity. One row per run_date with run counts, distinct
+      runners, total distance / duration, and a duration-weighted average
+      pace.
+    columns:
+      - name: run_date
+        description: Calendar date (UTC) runs started on.
+        tests:
+          - unique
+          - not_null
+      - name: runs_count
+        description: Count of runs recorded that day.
+        tests:
+          - not_null
+      - name: distinct_runners
+        description: Count of distinct users who ran that day.
+        tests:
+          - not_null
+      - name: total_distance_km
+        description: Total distance recorded that day.
+        tests:
+          - not_null
+      - name: total_duration_s
+        description: Total run time recorded that day, in seconds.
+        tests:
+          - not_null
+      - name: avg_pace_s_per_km
+        description: >
+          Duration-weighted average pace (total seconds / total km). Null when
+          all recorded distance that day is zero.

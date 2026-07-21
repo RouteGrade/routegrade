@@ -88,3 +88,58 @@ models:
         description: When the route was first saved.
         tests:
           - not_null
+
+  - name: stg_runs
+    description: >
+      Staging view for recorded runs. One row per run_id; excludes path (GPS
+      trace — PII-adjacent) and splits (bulky JSONB) so neither propagates
+      into marts.
+    columns:
+      - name: run_id
+        description: Recorded run ID (client-issued UUID).
+        tests:
+          - unique
+          - not_null
+      - name: user_id
+        description: Owning RouteGrade user.
+        tests:
+          - not_null
+      - name: route_id
+        description: >
+          Loose pointer to the saved route followed; null for free runs and
+          may dangle if the route was later deleted.
+      - name: route_name
+        description: >
+          Route name snapshotted at run time (user free text — dropped in
+          dim_runs, same policy as saved-route names).
+      - name: started_at
+        description: When the run started.
+        tests:
+          - not_null
+      - name: duration_s
+        description: Total elapsed run time in seconds.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: distance_km
+        description: Recorded distance in km.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: avg_pace_s_per_km
+        description: Client-reported average pace in seconds per km (nullable).
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: created_at
+        description: When the run row was first inserted.
+        tests:
+          - not_null
