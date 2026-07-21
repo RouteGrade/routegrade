@@ -51,6 +51,12 @@ provisioning; heartbeat should pull from Next.)*
   `rate_limit_buckets` table with atomic CTE-based UPSERT. Ships bundled
   with c-config-prep on branch `heartbeat/2026-07-21-prod-fixes`
   (2026-07-21 run 6, staff-engineer). 118 API tests pass.
+- [x] URGENT Vercel FastAPI-preset build fix — deleted redundant
+  `api/index.py`, simplified `vercel.json` to declare FastAPI framework
+  preset; local `uvicorn main:app` boots cleanly with all runs endpoints
+  registered. Founder still needs to verify Root Directory = services/api
+  in dashboard, then redeploy (2026-07-21 run 6b, branch
+  `heartbeat/2026-07-21-vercel-fastapi-fix`).
 - [x] URGENT Diagnose stale prod API deploy — root cause is Vercel dashboard
   auto-deploy misconfigured; repo code and Vercel config verified correct;
   exact founder click path documented in PENDING_APPROVALS #1b (2026-07-21

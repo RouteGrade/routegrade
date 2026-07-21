@@ -33,13 +33,40 @@ web to fall back to `window.location.origin` instead of localhost when
 `NEXT_PUBLIC_APP_URL` is unset. Belt-and-suspenders: set that env var in
 Vercel too (`NEXT_PUBLIC_APP_URL=https://routegrade-web.vercel.app`).
 
-### 1b. Fix Vercel auto-deploy for routegrade-api (URGENT — API stuck at MVP 4)
-Confirmed by devops diagnosis: repo code is correct (runs router wired in
-`services/api/app/main.py:11,43`; Vercel entry `api/index.py:7` re-exports
-`app.main:app` verbatim; `vercel.json` rewrite is fine). The deployment is
-frozen at commit `10558bb` (MVP 3+4, 2026-07-17). MVP 5 (`da6bf78`,
-2026-07-18) and everything after have failed to trigger a build. This is a
-Vercel dashboard problem — no code change is possible.
+### 1b. Fix Vercel deploy for routegrade-api (URGENT — API stuck at MVP 4)
+The build failure is now known: Vercel introduced a **FastAPI framework
+preset** that auto-detects FastAPI apps. Actual build log:
+```
+Error: No FastAPI entrypoint found in default locations, but found
+potential entrypoints:
+  services/api/api/index.py (variable: app)
+  services/api/app/main.py (variable: app)
+  services/api/main.py (variable: app)
+```
+Two conditions caused the failure together:
+1. Vercel's Root Directory is at the repo root, not `services/api`, so the
+   preset can't find a `main.py` in a "default location" (the project root).
+2. Three files exported `app`, so even if Root Directory were fixed, the
+   preset had no unambiguous entrypoint to pick.
+
+Code fix (branch `heartbeat/2026-07-21-vercel-fastapi-fix`, commit
+`473fe6d`, pushed): removed `services/api/api/index.py` (redundant Vercel
+serverless stub) and simplified `services/api/vercel.json` to
+`{"framework": "fastapi"}`. Now only `services/api/main.py` and
+`services/api/app/main.py` remain — with Root Directory set correctly, the
+preset finds `main.py` at project root unambiguously.
+
+**Founder actions to complete the fix**:
+1. Merge `heartbeat/2026-07-21-vercel-fastapi-fix` into main.
+2. In Vercel dashboard → `routegrade-api` project → Settings → General:
+   verify **Root Directory** is `services/api`. If it isn't, set it.
+3. Settings → Git: verify repo connection to `RouteGrade/routegrade`,
+   Production Branch = `main`. Clear any Ignored Build Step that might
+   return exit 0.
+4. Deployments → Redeploy on latest main (uncheck "Use existing Build
+   Cache" for a clean build).
+5. Re-run `scripts/smoke-test.sh` — the /v1/users/me/runs check should
+   flip from 404 to 401 (endpoint exists, needs auth).
 
 **Exact click path**:
 1. https://vercel.com/dashboard → RouteGrade team → project **`routegrade-api`**

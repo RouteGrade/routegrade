@@ -13,6 +13,27 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 17:55 (run 6b, founder-triggered — Vercel build error surfaced)
+- **Did**: Founder shared the Vercel deploy URL that was failing. Actual
+  error was `No FastAPI entrypoint found in default locations` with three
+  candidates listed — meaning Vercel's new FastAPI framework preset was
+  active but couldn't disambiguate. Root cause: (a) Root Directory is at
+  repo root not `services/api`, so preset couldn't find `main.py` in the
+  project-root default location; (b) three files exported `app` so it
+  couldn't pick one anyway. Code fix on branch
+  `heartbeat/2026-07-21-vercel-fastapi-fix` (commit `473fe6d`, pushed):
+  removed `services/api/api/index.py` (redundant Vercel-only stub, nothing
+  else referenced it) and simplified `services/api/vercel.json` to
+  `{"framework": "fastapi"}`. Only `main.py` and `app/main.py` remain as
+  candidates — with Root Directory correct, `main.py` at project root wins
+  unambiguously.
+- **Verified**: `uvicorn main:app` boots the app locally with all 7 paths
+  registered (was 5 pre-MVP-5). Every heartbeat branch continues to build
+  green against the change.
+- **Blocked on founder**: (1) merge the vercel-fastapi-fix branch, (2)
+  verify/set Root Directory = `services/api` in dashboard, (3) redeploy.
+  Detailed click path in PENDING_APPROVALS #1b.
+
 ## 2026-07-21 17:28 (run 6, founder-triggered — "fix production")
 - **Did**: Two parallel workstreams targeting the two prod issues surfaced
   by run 5's smoke test.
