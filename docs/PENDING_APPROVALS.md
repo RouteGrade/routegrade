@@ -25,13 +25,28 @@ Entry format:
 These are approved but physically require the founder's accounts/dashboards.
 The heartbeat implements everything code-side behind env vars in the meantime.
 
-### 1. Supabase auth redirect allow-list (URGENT — production sign-in broken)
-Add `https://routegrade-web.vercel.app/auth/callback` to the Supabase Auth
-redirect allow-list. 2-minute dashboard action, no code involved. Also merge
-branch `heartbeat/2026-07-21-fix-auth-localhost-fallback` — it hardens the
-web to fall back to `window.location.origin` instead of localhost when
-`NEXT_PUBLIC_APP_URL` is unset. Belt-and-suspenders: set that env var in
-Vercel too (`NEXT_PUBLIC_APP_URL=https://routegrade-web.vercel.app`).
+### 1. Supabase Auth URL configuration (CRITICAL — Google sign-in broken)
+**This is the root cause.** Our web code correctly requests
+`redirectTo: https://routegrade-web.vercel.app/auth/callback`, but Supabase
+ignores it because that URL is not in the project's Redirect URLs allowlist.
+Supabase then falls back to its project **Site URL**, which is currently
+`http://localhost:3000`. User lands at `http://localhost:3000/?code=<uuid>#`
+and Safari (or any browser not running a local dev server) can't reach it.
+
+**Fix — Supabase dashboard, ~2 minutes:**
+1. https://supabase.com/dashboard → RouteGrade project
+2. **Authentication → URL Configuration**
+3. **Site URL**: change from `http://localhost:3000` to
+   `https://routegrade-web.vercel.app`
+4. **Redirect URLs**: add both entries (leave any existing localhost ones
+   for local dev):
+   - `https://routegrade-web.vercel.app/auth/callback`
+   - `https://routegrade-web.vercel.app/**` (wildcard for the `next=` param)
+5. Save. Takes effect immediately — no redeploy, no cache clear needed.
+
+Code side is already done (branch merged; verified in prod HTML — no
+localhost URLs bake into the client bundle). This dashboard setting is the
+only remaining blocker for Google sign-in.
 
 ### 1b. Fix Vercel deploy for routegrade-api (URGENT — API stuck at MVP 4)
 The build failure is now known: Vercel introduced a **FastAPI framework
