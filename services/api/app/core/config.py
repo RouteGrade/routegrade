@@ -100,6 +100,40 @@ class Settings(BaseSettings):
         description="Extra burst headroom above the sustained rate",
     )
 
+    # Per-user rate limits on authenticated write endpoints. Both are keyed on
+    # the authenticated user id, so multi-tenant abuse of a single IP does not
+    # starve other users. Defaults are permissive enough for real UI flows
+    # (a runner saving several routes in a burst) but strict enough that a
+    # runaway script hits a wall well before it can DoS the DB.
+    runs_rate_limit_per_minute: int = Field(
+        default=60,
+        description="Sustained per-user PUT /v1/users/me/runs/{id} per minute; 0 disables",
+    )
+    runs_rate_limit_burst: int = Field(
+        default=60,
+        description="Extra burst headroom (capacity = per_minute + burst)",
+    )
+    saved_routes_rate_limit_per_minute: int = Field(
+        default=30,
+        description="Sustained per-user PUT /v1/users/me/routes/{id} per minute; 0 disables",
+    )
+    saved_routes_rate_limit_burst: int = Field(
+        default=30,
+        description="Extra burst headroom (capacity = per_minute + burst)",
+    )
+
+    # Upstash Redis REST credentials. Both blank = use in-memory fallback.
+    # Set both in Vercel and redeploy to activate the shared Redis backend —
+    # this is the *only* config change required.
+    upstash_redis_rest_url: str = Field(
+        default="",
+        description="Upstash REST endpoint URL (leave blank to use in-memory limiter)",
+    )
+    upstash_redis_rest_token: str = Field(
+        default="",
+        description="Upstash REST auth token (leave blank to use in-memory limiter)",
+    )
+
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:

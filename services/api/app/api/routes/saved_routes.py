@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.rate_limit_deps import enforce_saved_routes_write_rate_limit
 from app.auth.dependencies import CurrentClaims
 from app.db.session import get_db
 from app.repositories import saved_routes as repo
@@ -49,7 +50,11 @@ def get_route(
     return SavedRouteRead.model_validate(route)
 
 
-@router.put("/{route_id}", response_model=SavedRouteEnvelope)
+@router.put(
+    "/{route_id}",
+    response_model=SavedRouteEnvelope,
+    dependencies=[Depends(enforce_saved_routes_write_rate_limit)],
+)
 def save_route(
     route_id: uuid.UUID,
     payload: SavedRouteSave,

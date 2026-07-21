@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.rate_limit_deps import enforce_runs_write_rate_limit
 from app.auth.dependencies import CurrentClaims
 from app.db.session import get_db
 from app.repositories import runs as repo
@@ -44,7 +45,11 @@ def get_run(
     return RunRead.model_validate(run)
 
 
-@router.put("/{run_id}", response_model=RunEnvelope)
+@router.put(
+    "/{run_id}",
+    response_model=RunEnvelope,
+    dependencies=[Depends(enforce_runs_write_rate_limit)],
+)
 def save_run(
     run_id: uuid.UUID,
     payload: RunSave,

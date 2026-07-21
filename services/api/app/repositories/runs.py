@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models.run import Run
@@ -56,7 +57,12 @@ def upsert_for_user(
     if existing_any_owner is None:
         run = Run(id=run_id, user_id=user_id, **fields)
         session.add(run)
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as exc:  # pragma: no cover — race with a concurrent insert
+            # Another writer beat us to this id between the SELECT and INSERT.
+            # Map to the same collision the caller already handles as 409.
+            raise RunIdCollision(run_id) from exc
         return run, True
 
     for key, value in fields.items():

@@ -139,8 +139,10 @@ def app_with_overrides(jwks_dict: dict[str, Any]):
     # Stub JWKS so no real HTTP call happens during tests.
     app.state.jwks_client = StubJWKSClient(jwks_dict)
 
-    # Disable /plan rate limiting by default; rate-limit tests install their own.
+    # Disable rate limiting by default; rate-limit tests install their own.
     app.state.plan_rate_limiter = None
+    app.state.runs_rate_limiter = None
+    app.state.saved_routes_rate_limiter = None
 
     # Use a fresh in-memory SQLite for each test.
     engine = _make_test_engine()

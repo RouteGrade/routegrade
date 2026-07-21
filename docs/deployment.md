@@ -39,13 +39,55 @@ web production URL. Changing an env var requires a redeploy to take effect.
   Supabase → Authentication → URL Configuration, or Google / magic-link
   sign-in will bounce back to localhost in production.
 
+## Rate limiting backends
+
+Every rate limiter (`/plan`, `/v1/users/me/runs` writes, `/v1/users/me/routes`
+writes) goes through the same `RateLimiter` protocol in
+`app/core/rate_limit.py`. Two backends ship:
+
+- **In-memory (default)**: per-instance token buckets. Fine for MVP-scale
+  traffic; Vercel may run several instances, so the effective global limit is
+  `limit × instances` and buckets reset on cold starts.
+- **Upstash Redis (shared)**: atomic Lua-scripted token bucket over Upstash's
+  HTTPS REST API. Every instance shares the same buckets, so the limit is
+  truly global. Fails **open** on any Redis error (timeout, non-2xx, malformed
+  response) — an Upstash outage never blocks legitimate writes.
+
+### Activating Upstash
+
+1. Provision an Upstash Redis database (free tier is fine to start).
+2. In each Vercel project's Production env, set:
+
+   | Variable | Value |
+   | --- | --- |
+   | `UPSTASH_REDIS_REST_URL` | Upstash → REST → **UPSTASH_REDIS_REST_URL** |
+   | `UPSTASH_REDIS_REST_TOKEN` | Upstash → REST → **UPSTASH_REDIS_REST_TOKEN** |
+
+3. Redeploy the API. That is the whole activation — no code change and no
+   other flag toggle. Both blank ⇒ in-memory fallback; both set ⇒ Upstash.
+
+### Tunable per-endpoint limits
+
+All defaults are permissive enough for a real UI flow but strict enough that a
+runaway script hits a wall well before it can DoS the DB. Override any of
+these in Vercel env if the traffic pattern changes:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ROUTE_PLAN_RATE_LIMIT_PER_MINUTE` | 10 | Per-IP `/v1/routes/plan` sustained rate |
+| `ROUTE_PLAN_RATE_LIMIT_BURST` | 5 | Extra burst headroom |
+| `RUNS_RATE_LIMIT_PER_MINUTE` | 60 | Per-user `PUT /v1/users/me/runs/{id}` sustained rate |
+| `RUNS_RATE_LIMIT_BURST` | 60 | Extra burst headroom |
+| `SAVED_ROUTES_RATE_LIMIT_PER_MINUTE` | 30 | Per-user `PUT /v1/users/me/routes/{id}` sustained rate |
+| `SAVED_ROUTES_RATE_LIMIT_BURST` | 30 | Extra burst headroom |
+
+Capacity = `PER_MINUTE + BURST`. Setting `PER_MINUTE=0` disables that limiter.
+
 ## Known serverless caveats
 
-1. **Rate limiting is per-instance.** The `/plan` token bucket lives in process
-   memory; Vercel may run several instances, so the effective global limit is
-   `limit × instances` and resets on cold starts. Acceptable for MVP 4 —
-   swap the storage for Redis/Upstash behind the same `check()` interface when
-   it matters.
+1. **Client-IP trust.** The `/plan` limiter reads `x-real-ip` first
+   (Vercel-supplied, trusted), then falls back to the *rightmost*
+   `x-forwarded-for` hop. Never use the leftmost hop — clients can spoof it.
 2. **Cold starts** add ~1-2 s to the first request on an idle function.
 3. **Provider defaults are still the public demo endpoints** (Nominatim public
    instance, OSRM demo with the driving profile). Self-host OSRM (`foot`) and
