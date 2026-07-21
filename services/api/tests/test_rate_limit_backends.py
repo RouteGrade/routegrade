@@ -1,4 +1,4 @@
-"""Tests for the Postgres and Redis rate-limit backends + factory selection.
+"""Tests for the Postgres rate-limit backend + factory selection.
 
 The Postgres backend is exercised against an in-memory SQLite (the class has an
 explicit SQLite branch that emulates the atomic UPSERT), which covers the
@@ -8,6 +8,8 @@ really overlap them, but the class-level invariant we need is that consuming a
 token is atomic against the read that decides whether to consume, and both
 implementations enforce that (SQLite via single-writer; Postgres via the
 UPSERT row lock).
+
+The Redis backend is covered by `test_rate_limit_redis.py`.
 """
 
 from __future__ import annotations
@@ -26,6 +28,11 @@ from app.core.rate_limit import (
     TokenBucketLimiter,
     get_limiter,
 )
+
+# RedisTokenBucketLimiter is imported so the factory-selection tests below can
+# assert isinstance() on it; the backend's own behavior is covered in
+# `tests/test_rate_limit_redis.py`.
+_ = RedisTokenBucketLimiter
 
 
 # ---------------------------------------------------------------------------
@@ -158,80 +165,6 @@ def test_postgres_fails_open_on_execute_error():
     assert allowed is True
     assert retry_after == 0.0
     fake_session.close.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Redis backend
-# ---------------------------------------------------------------------------
-
-
-class _FakeHTTPResponse:
-    def __init__(self, body):
-        self._body = body
-
-    def raise_for_status(self):
-        return None
-
-    def json(self):
-        return self._body
-
-
-class _FakeHTTPClient:
-    def __init__(self, body):
-        self._body = body
-        self.calls = []
-
-    def post(self, url, json, headers, timeout):
-        self.calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
-        return _FakeHTTPResponse(self._body)
-
-
-def test_redis_allowed_response():
-    fake = _FakeHTTPClient({"result": [1, "4.0"]})
-    limiter = RedisTokenBucketLimiter(
-        rate_per_minute=60,
-        capacity=5,
-        rest_url="https://example.upstash.io",
-        rest_token="tok",
-        http_client=fake,
-    )
-    allowed, retry_after = limiter.check("client-f")
-    assert allowed is True
-    assert retry_after == 0.0
-    assert len(fake.calls) == 1
-    assert fake.calls[0]["headers"]["Authorization"] == "Bearer tok"
-
-
-def test_redis_denied_response_computes_retry_after():
-    fake = _FakeHTTPClient({"result": [0, "0.5"]})
-    limiter = RedisTokenBucketLimiter(
-        rate_per_minute=60,  # 1 token/sec
-        capacity=5,
-        rest_url="https://example.upstash.io",
-        rest_token="tok",
-        http_client=fake,
-    )
-    allowed, retry_after = limiter.check("client-g")
-    assert allowed is False
-    # 0.5 token short → 0.5s at 1 token/sec.
-    assert 0.45 < retry_after < 0.55
-
-
-def test_redis_fails_open_on_transport_error():
-    class Boom:
-        def post(self, *a, **kw):
-            raise RuntimeError("upstash unreachable")
-
-    limiter = RedisTokenBucketLimiter(
-        rate_per_minute=60,
-        capacity=5,
-        rest_url="https://example.upstash.io",
-        rest_token="tok",
-        http_client=Boom(),
-    )
-    allowed, retry_after = limiter.check("client-h")
-    assert allowed is True
-    assert retry_after == 0.0
 
 
 # ---------------------------------------------------------------------------

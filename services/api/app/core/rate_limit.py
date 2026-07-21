@@ -1,6 +1,7 @@
 """Per-key token-bucket rate limiter with three interchangeable backends.
 
 Why three backends:
+
 - **In-memory** (`TokenBucketLimiter`): dependency-free, per-process. Correct
   for a single-instance deployment (local dev, tests). Wrong for horizontally
   scaled serverless — each instance holds its own bucket, so the effective
@@ -13,33 +14,44 @@ Why three backends:
   captures the pre-refill state) that folds the refill math into the SQL — so
   two concurrent requests on the same key can never both spend the last token.
 - **Redis / Upstash** (`RedisTokenBucketLimiter`): opt-in when the founder has
-  provisioned Upstash. Fewer round-trips, higher ceiling; same semantics via
-  an atomic Lua script.
+  provisioned Upstash. Talks to Upstash's HTTPS REST API using a single atomic
+  Lua script for refill + consume + persist.
 
 All three satisfy the `RateLimiter` protocol so callers stay identical. The
 `get_limiter()` factory picks the backend from environment settings:
-Redis (if creds present) > Postgres (default when DATABASE_URL is set) > memory.
+Redis (if Upstash creds present) > Postgres (default when `DATABASE_URL` is set
+and `RATE_LIMIT_USE_POSTGRES=true`) > in-memory.
 
 Fail-open contract: infrastructure failures (Postgres timeout, Redis down)
 must never take the site offline. Both non-memory backends log the error and
-allow the request. Rate limiting is a safety valve, not an authorization gate.
+allow the request. Rate limiting is a safety valve, not an authorization gate;
+abuse spikes during an outage are strictly less harmful than an outage of our
+own writes.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 
 class RateLimiter(Protocol):
-    """Shared contract: consume one token for `key`, return (allowed, retry_after_s)."""
+    """Backend-agnostic contract. Consumers depend only on this."""
 
-    def check(self, key: str) -> tuple[bool, float]: ...
+    def check(self, key: str) -> tuple[bool, float]:
+        """Try to consume one token for `key`.
+
+        Returns `(allowed, retry_after_seconds)`. `retry_after_seconds` is
+        `0.0` when `allowed` is True and a positive estimate otherwise.
+        """
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +66,10 @@ class _Bucket:
 
 
 class TokenBucketLimiter:
-    """`rate_per_minute` sustained, `capacity` burst. `check` is thread-safe."""
+    """`rate_per_minute` sustained, `capacity` burst. `check` is thread-safe.
+
+    In-process backend. Buckets live only in this instance's memory.
+    """
 
     def __init__(self, *, rate_per_minute: float, capacity: int) -> None:
         if rate_per_minute <= 0 or capacity <= 0:
@@ -66,8 +81,6 @@ class TokenBucketLimiter:
         self._last_prune = time.monotonic()
 
     def check(self, key: str) -> tuple[bool, float]:
-        """Consume one token for `key`. Returns (allowed, retry_after_seconds)."""
-
         now = time.monotonic()
         with self._lock:
             self._maybe_prune(now)
@@ -315,120 +328,144 @@ class PostgresTokenBucketLimiter:
 
 
 # ---------------------------------------------------------------------------
-# Redis / Upstash backend (opt-in for higher throughput)
+# Redis (Upstash REST) backend — opt-in for higher throughput
 # ---------------------------------------------------------------------------
 
 
-# The Lua script runs atomically on the Redis server — Redis executes scripts
-# under its single-threaded model, so concurrent calls on the same key are
-# fully serialized.
-_REDIS_TOKEN_BUCKET_LUA = """
-local key = KEYS[1]
+# Lua script: atomic token-bucket refill + consume. Stores two fields under
+# `key`: `t` (current tokens, float) and `u` (last-update wallclock ms).
+# ARGV: capacity, rate_per_second, now_ms, ttl_seconds.
+# Returns: {allowed(0|1), remaining_tokens_scaled, retry_after_ms}.
+# `remaining_tokens_scaled` is tokens * 1000 (Redis Lua returns integers).
+_TOKEN_BUCKET_LUA = """
 local capacity = tonumber(ARGV[1])
-local refill_rate = tonumber(ARGV[2])
-local now_ms = tonumber(ARGV[3])
+local rate = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
 
-local bucket = redis.call('HMGET', key, 'tokens', 'ts')
-local tokens = tonumber(bucket[1])
-local ts = tonumber(bucket[2])
-
+local data = redis.call('HMGET', KEYS[1], 't', 'u')
+local tokens = tonumber(data[1])
+local updated = tonumber(data[2])
 if tokens == nil then
-    tokens = capacity
-    ts = now_ms
-else
-    local elapsed = (now_ms - ts) / 1000.0
-    tokens = math.min(capacity, tokens + elapsed * refill_rate)
-    ts = now_ms
+  tokens = capacity
+  updated = now
 end
+
+local elapsed_ms = now - updated
+if elapsed_ms < 0 then elapsed_ms = 0 end
+tokens = math.min(capacity, tokens + (elapsed_ms / 1000.0) * rate)
 
 local allowed = 0
-if tokens >= 1 then
-    tokens = tokens - 1
-    allowed = 1
+local retry_ms = 0
+if tokens >= 1.0 then
+  tokens = tokens - 1.0
+  allowed = 1
+else
+  retry_ms = math.ceil(((1.0 - tokens) / rate) * 1000)
 end
 
-redis.call('HMSET', key, 'tokens', tokens, 'ts', ts)
-local ttl = math.max(60, math.ceil(2 * capacity / refill_rate))
-redis.call('EXPIRE', key, ttl)
+redis.call('HMSET', KEYS[1], 't', tostring(tokens), 'u', tostring(now))
+redis.call('EXPIRE', KEYS[1], ttl)
 
-return {allowed, tostring(tokens)}
+return {allowed, math.floor(tokens * 1000), retry_ms}
 """
 
 
 class RedisTokenBucketLimiter:
-    """Upstash Redis REST backed limiter. Same semantics as the Postgres one."""
+    """Upstash REST-backed token-bucket limiter.
 
-    _TIMEOUT_S = 0.5
+    The Upstash REST API accepts Redis commands as JSON arrays and returns
+    JSON `{result, error}`. We use the `EVAL` command with an inline Lua
+    script so refill + consume + persist happens atomically inside Redis.
+
+    All errors fail open — see the module docstring.
+    """
+
+    # Under 500ms per the P1 spec. Redis calls should be sub-100ms in practice.
+    _DEFAULT_TIMEOUT_SECONDS = 0.4
 
     def __init__(
         self,
         *,
-        rate_per_minute: float,
-        capacity: int,
         rest_url: str,
         rest_token: str,
-        key_prefix: str = "rl:plan:",
-        http_client: Any = None,
+        rate_per_minute: float,
+        capacity: int,
+        key_prefix: str = "rg:rl:",
+        timeout_seconds: float | None = None,
+        client: httpx.Client | None = None,
     ) -> None:
         if rate_per_minute <= 0 or capacity <= 0:
             raise ValueError("rate_per_minute and capacity must be positive")
         if not rest_url or not rest_token:
             raise ValueError("rest_url and rest_token are required")
+
         self._rate_per_second = rate_per_minute / 60.0
-        self._capacity = float(capacity)
-        self._rest_url = rest_url.rstrip("/")
-        self._rest_token = rest_token
+        self._capacity = int(capacity)
         self._key_prefix = key_prefix
-        self._http_client = http_client  # injectable for tests
+        # TTL: long enough that a bucket that would refill to full still exists,
+        # short enough that abandoned keys don't linger. Capacity / rate + slack.
+        self._ttl_seconds = max(60, int(self._capacity / self._rate_per_second) * 2)
+        timeout = timeout_seconds if timeout_seconds is not None else self._DEFAULT_TIMEOUT_SECONDS
+
+        self._rest_url = rest_url.rstrip("/")
+        self._auth_header = f"Bearer {rest_token}"
+        self._client = client or httpx.Client(timeout=timeout)
+        # Track whether we own the client so we can close it cleanly.
+        self._owns_client = client is None
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
 
     def check(self, key: str) -> tuple[bool, float]:
+        namespaced = f"{self._key_prefix}{key}"
+        now_ms = int(time.time() * 1000)
+        # Upstash REST body for EVAL: [command, ...args]
+        body = [
+            "EVAL",
+            _TOKEN_BUCKET_LUA,
+            "1",
+            namespaced,
+            str(self._capacity),
+            f"{self._rate_per_second:.6f}",
+            str(now_ms),
+            str(self._ttl_seconds),
+        ]
         try:
-            payload = [
-                _REDIS_TOKEN_BUCKET_LUA,
-                "1",
-                f"{self._key_prefix}{key}",
-                str(self._capacity),
-                str(self._rate_per_second),
-                str(int(time.time() * 1000)),
-            ]
-            headers = {"Authorization": f"Bearer {self._rest_token}"}
-            if self._http_client is not None:
-                response = self._http_client.post(
-                    f"{self._rest_url}/eval",
-                    json=payload,
-                    headers=headers,
-                    timeout=self._TIMEOUT_S,
-                )
-            else:
-                import httpx
-
-                response = httpx.post(
-                    f"{self._rest_url}/eval",
-                    json=payload,
-                    headers=headers,
-                    timeout=self._TIMEOUT_S,
-                )
+            response = self._client.post(
+                self._rest_url,
+                headers={"Authorization": self._auth_header},
+                json=body,
+            )
             response.raise_for_status()
-            body = response.json()
-            result = body.get("result") if isinstance(body, dict) else body
-            if not isinstance(result, list) or len(result) < 2:
-                logger.warning("rate_limit.redis.bad_response", extra={"body": str(body)})
-                return True, 0.0
-            allowed = int(result[0]) == 1
-            tokens = float(result[1])
-            if allowed:
-                return True, 0.0
-            return False, self._retry_after(tokens)
-        except Exception as exc:  # noqa: BLE001 — fail-open on any transport error
+            data = response.json()
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.warning("rate_limit.redis.fail_open key=%s error=%s", key, exc)
+            return True, 0.0
+
+        if not isinstance(data, dict) or "result" not in data or data.get("error"):
             logger.warning(
-                "rate_limit.redis.error", extra={"key": key, "error": str(exc)}
+                "rate_limit.redis.fail_open key=%s unexpected_response=%r", key, data
             )
             return True, 0.0
 
-    def _retry_after(self, tokens: float) -> float:
-        if tokens >= 1.0 or self._rate_per_second <= 0:
-            return 0.0
-        return (1.0 - tokens) / self._rate_per_second
+        result = data["result"]
+        # Upstash EVAL returns the Lua table as a JSON array.
+        if not isinstance(result, list) or len(result) < 3:
+            logger.warning("rate_limit.redis.fail_open key=%s bad_result=%r", key, result)
+            return True, 0.0
+
+        try:
+            allowed = int(result[0]) == 1
+            retry_after_ms = int(result[2])
+        except (TypeError, ValueError):
+            logger.warning("rate_limit.redis.fail_open key=%s parse_error=%r", key, result)
+            return True, 0.0
+
+        if allowed:
+            return True, 0.0
+        return False, retry_after_ms / 1000.0
 
 
 # ---------------------------------------------------------------------------
@@ -436,38 +473,71 @@ class RedisTokenBucketLimiter:
 # ---------------------------------------------------------------------------
 
 
+_UNSET: Any = object()
+
+
 def get_limiter(
     *,
     rate_per_minute: float,
     capacity: int,
     settings: Any | None = None,
+    upstash_url: str | None = _UNSET,
+    upstash_token: str | None = _UNSET,
+    key_prefix: str = "rg:rl:",
 ) -> RateLimiter | None:
     """Choose a backend. Priority: Redis > Postgres > in-memory.
 
-    Returns None when `rate_per_minute <= 0` (rate limiting explicitly disabled).
+    Returns None when `rate_per_minute <= 0` or `capacity <= 0` (rate limiting
+    explicitly disabled).
+
+    Backend selection reads BOTH sets of env-derived flags:
+    - `upstash_redis_rest_url` + `upstash_redis_rest_token` → Redis
+    - `rate_limit_use_postgres` + `database_url` → Postgres
+    - otherwise → in-memory
+
+    Callers may pass explicit `upstash_url`/`upstash_token` (used by
+    `app/api/rate_limit_deps.py` and `app/api/routes/plans.py`) to keep the
+    call site self-contained. When either is left unset, the corresponding
+    value is read from `settings` (loaded via `get_settings()` if not passed).
     """
 
     if rate_per_minute <= 0 or capacity <= 0:
         return None
 
-    if settings is None:
-        from app.core.config import get_settings
+    # Only load settings lazily — some callers (tests) pass explicit
+    # Upstash creds and never want to touch app config.
+    def _load_settings() -> Any:
+        nonlocal settings
+        if settings is None:
+            from app.core.config import get_settings
 
-        settings = get_settings()
+            settings = get_settings()
+        return settings
 
-    redis_url = getattr(settings, "upstash_redis_rest_url", None)
-    redis_token = getattr(settings, "upstash_redis_rest_token", None)
-    if redis_url and redis_token:
+    resolved_url = (
+        upstash_url
+        if upstash_url is not _UNSET
+        else getattr(_load_settings(), "upstash_redis_rest_url", None)
+    )
+    resolved_token = (
+        upstash_token
+        if upstash_token is not _UNSET
+        else getattr(_load_settings(), "upstash_redis_rest_token", None)
+    )
+
+    if resolved_url and resolved_token:
         logger.info("rate_limit.backend.redis")
         return RedisTokenBucketLimiter(
+            rest_url=resolved_url,
+            rest_token=resolved_token,
             rate_per_minute=rate_per_minute,
             capacity=capacity,
-            rest_url=redis_url,
-            rest_token=redis_token,
+            key_prefix=key_prefix,
         )
 
-    database_url = getattr(settings, "database_url", None)
-    use_postgres = getattr(settings, "rate_limit_use_postgres", False)
+    s = _load_settings()
+    database_url = getattr(s, "database_url", None)
+    use_postgres = getattr(s, "rate_limit_use_postgres", False)
     if database_url and use_postgres:
         logger.info("rate_limit.backend.postgres")
         return PostgresTokenBucketLimiter(
