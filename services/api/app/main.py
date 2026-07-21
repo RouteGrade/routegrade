@@ -44,4 +44,8 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+# NOTE: no module-level `app = create_app()` here. Only `services/api/main.py`
+# exports a module-level `app` for the ASGI server (Vercel + uvicorn). Having
+# `app` here as well confuses Vercel's FastAPI framework preset, which picks
+# an entrypoint by scanning for `app` at module scope and refuses when it
+# finds more than one candidate.
