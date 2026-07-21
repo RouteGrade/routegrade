@@ -9,20 +9,11 @@ Format: `- [ ] P<1-3> <item> — owner: <agent> (context/links)`
 
 ## Now (Phase C kickoff + carried-over P1s)
 
-- [ ] P1 Redis/Upstash rate limiter backend behind the existing `check()`
-  interface in `app/core/rate_limit.py`, env-configured with in-memory
-  fallback; extend coverage to runs + saved-routes endpoints — owner:
-  staff-engineer (activation blocked `[founder]` Upstash creds)
-- [ ] P1 OSRM cutover readiness: make base URL + profile fully env-driven,
-  verify loop tolerance logic against a `foot` profile locally (docker
-  one-shot if feasible), document the cutover runbook — owner: cto
-  (activation blocked `[founder]` host)
+*(no unblocked P1s — remaining P1s in the current Now list require founder
+provisioning; heartbeat should pull from Next.)*
 
 ## Next (Phase C completion)
 
-- [ ] P2 Fix rate-limit client key in `plans.py`: leftmost `X-Forwarded-For`
-  is client-controllable on Vercel (limiter bypass) — use the platform's
-  trusted client-IP header — owner: security-engineer (2026-07-21 audit)
 - [ ] P2 `route_plans` cache table (Alembic additive migration) keyed on
   `(start, distance, preference)` — owner: staff-engineer
 - [ ] P2 Tile provider style URL behind env var (OpenFreeMap default for dev),
@@ -47,13 +38,24 @@ Format: `- [ ] P<1-3> <item> — owner: <agent> (context/links)`
 
 - [ ] P3 Security hardening batch (2026-07-21 audit): FORCE ROW LEVEL SECURITY
   on runs/saved_routes (director-of-data); body-size limit middleware as
-  defense-in-depth; make run upsert insert race-safe (IntegrityError → 409);
-  UTC-explicit date casts in dim models — owners: various
+  defense-in-depth; UTC-explicit date casts in dim models — owners: various
+  (race-safe upsert now done for both runs + saved_routes)
+- [ ] P3 Reconcile `docs/routing-setup.md` osrm-partition/customize commands
+  with the new runbook (drop the `.osrm` suffix) — owner: technical-writer
 
 ## Icebox
 
 ## Done
 
+- [x] P1 Redis/Upstash rate-limit backend + coverage extension to runs +
+  saved-routes writes + XFF-bypass fix + race-safe upserts on both repos
+  (2026-07-21 run 4, staff-engineer; branch
+  `heartbeat/2026-07-21-c-config-prep`, awaiting founder merge + Upstash
+  activation)
+- [x] P1 OSRM cutover readiness — no code change needed (env-vars-only
+  verified); runbook shipped in `docs/OSRM_CUTOVER_RUNBOOK.md`; foot-profile
+  loop tolerance validated on a real local Toronto OSRM (2026-07-21 run 4,
+  cto; same branch)
 - [x] P1 dbt runs models — source, stg_runs (PII excluded), dim_runs,
   fct_runs_daily + tests (2026-07-21 run 3, director-of-data; branch
   heartbeat/2026-07-21-ms6-kickoff)

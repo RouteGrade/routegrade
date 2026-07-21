@@ -13,6 +13,44 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 14:05 (run 4, founder-triggered)
+- **Did**: Two more Phase C P1s in parallel on branch
+  `heartbeat/2026-07-21-c-config-prep` (commit `3a78c79`, pushed, NOT merged).
+  (1) staff-engineer: Redis/Upstash rate-limit backend behind the existing
+  `check()` interface with atomic Lua EVAL, comprehensive fail-open behavior,
+  `get_limiter()` factory activated only when both Upstash env vars are set;
+  extended per-user rate limiting to `PUT /v1/users/me/runs` and
+  `PUT /v1/users/me/routes`; fixed the leftmost-XFF spoof bypass in the
+  /plan endpoint (now x-real-ip → rightmost XFF → client.host); race-safe
+  insert in the runs repository (IntegrityError → 409). (2) cto: OSRM
+  cutover verified env-vars-only (no code changes required); shipped
+  `docs/OSRM_CUTOVER_RUNBOOK.md`; spun up a real local OSRM foot instance
+  against a Toronto extract and confirmed loop tolerance converges to
+  ±2.3% across 2-10km loops (well inside the ±10% target). Staff-engineer
+  APPROVE with one should-fix: saved_routes had the same race the runs fix
+  addressed — applied the mirror fix.
+- **Verified**: services/api tests 107 passed (was 82, +25 net), ruff clean.
+  Redis fail-open covered by 16 dedicated tests hitting timeout, HTTP errors,
+  bad JSON, Upstash `{"error":...}` envelopes, and malformed result shapes.
+  OSRM verification: real local instance built from a 101MB Toronto extract,
+  planner sweep passed, existing plan tests pass with env pointed at it.
+- **Queued**: (P3) technical-writer to reconcile `docs/routing-setup.md`
+  osrm-partition/customize commands with the newer runbook form.
+- **Blocked on founder**:
+  - **Merge branches** (still no `gh`): `doc-staleness`, `ms6-kickoff`,
+    `c-config-prep`. Three branches queued for merge.
+  - **Supabase redirect allow-list** (still urgent, production sign-in broken).
+  - **Upstash Redis creds** — code-side complete; setting
+    `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel activates
+    the shared backend.
+  - **OSRM foot host** — code-side complete; runbook is in
+    `docs/OSRM_CUTOVER_RUNBOOK.md`; setting `OSRM_BASE_URL` +
+    `OSRM_PROFILE=foot` in Vercel activates the cutover.
+  - **Tile provider key** — next run picks up.
+- **Ops note**: workspace SSH known_hosts was missing github.com on this
+  run; added on-the-fly to unblock the push. Not a company issue — a
+  workspace environment quirk.
+
 ## 2026-07-21 03:05 (run 3, founder-triggered — MVP 6 approved)
 - **Did**: Founder approved MVP 6 = ALL THREE scopes (A+B+C), order C → A → B;
   recorded in DECISIONS.md, MS6.md written, backlog re-planned into phases,
