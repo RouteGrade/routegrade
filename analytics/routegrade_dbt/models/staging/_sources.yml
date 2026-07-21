@@ -93,3 +93,61 @@ sources:
             description: When the saved route was last replaced.
             tests:
               - not_null
+
+      - name: runs
+        description: >
+          One row per completed run a signed-in user recorded (MVP 5, Nike-Run-
+          Club-style tracking). Written by FastAPI's runs endpoints. Contains
+          the recorded GPS trace (path) and per-km splits — both are dropped in
+          stg_runs and must never reach a mart.
+        columns:
+          - name: id
+            description: Primary key; client-issued run UUID.
+            tests:
+              - unique
+              - not_null
+          - name: user_id
+            description: Owning user; mirrors auth.users.id (Supabase).
+            tests:
+              - not_null
+          - name: route_id
+            description: >
+              Loose pointer to the saved route the run followed. Intentionally
+              not a foreign key so deleting a saved route keeps run history
+              intact. Null for free runs.
+          - name: route_name
+            description: >
+              Route name snapshotted at run time. User-editable free text —
+              excluded from marts (same policy as saved_routes.name).
+          - name: started_at
+            description: When the run started (TZ-aware).
+            tests:
+              - not_null
+          - name: duration_s
+            description: Total elapsed run time in seconds (> 0 by check constraint).
+            tests:
+              - not_null
+          - name: distance_km
+            description: Recorded distance (>= 0 by check constraint).
+            tests:
+              - not_null
+          - name: avg_pace_s_per_km
+            description: >
+              Average pace in seconds per km as reported by the client; null
+              when the client did not compute one.
+          - name: splits
+            description: >
+              JSONB array of per-km splits ({"km": 1, "duration_s": 342}).
+              Bulky — excluded from staging.
+          - name: path
+            description: >
+              Recorded GPS trace as GeoJSON (JSONB). PII-adjacent location
+              data — excluded from staging and all downstream models.
+          - name: created_at
+            description: When the run row was first inserted (TZ-aware).
+            tests:
+              - not_null
+          - name: updated_at
+            description: When the run row was last modified.
+            tests:
+              - not_null

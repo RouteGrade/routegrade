@@ -194,3 +194,31 @@ class TestValidation:
             headers=auth_headers(str(uuid.uuid4())),
         )
         assert res.status_code == 422
+
+    def test_path_at_coordinate_cap_accepted(self, client, auth_headers):
+        from app.schemas.routes import MAX_LINESTRING_COORDINATES
+
+        coords = [
+            [-79.3832 + (i % 100) * 1e-5, 43.6519 + (i % 100) * 1e-5]
+            for i in range(MAX_LINESTRING_COORDINATES)
+        ]
+        res = client.put(
+            f"/v1/users/me/runs/{uuid.uuid4()}",
+            json=_run_payload(path={"type": "LineString", "coordinates": coords}),
+            headers=auth_headers(str(uuid.uuid4())),
+        )
+        assert res.status_code == 201
+        assert len(res.json()["run"]["path"]["coordinates"]) == MAX_LINESTRING_COORDINATES
+
+    def test_path_over_coordinate_cap_rejected(self, client, auth_headers):
+        from app.schemas.routes import MAX_LINESTRING_COORDINATES
+
+        coords = [
+            [-79.3832, 43.6519] for _ in range(MAX_LINESTRING_COORDINATES + 1)
+        ]
+        res = client.put(
+            f"/v1/users/me/runs/{uuid.uuid4()}",
+            json=_run_payload(path={"type": "LineString", "coordinates": coords}),
+            headers=auth_headers(str(uuid.uuid4())),
+        )
+        assert res.status_code == 422

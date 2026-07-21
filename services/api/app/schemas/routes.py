@@ -11,13 +11,33 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Preference = Literal["quiet", "flat", "scenic"]
 
 
+# Upper bound on positions in a LineString. The web recorder is
+# distance-gated (run-tracker.tsx drops fixes closer than MIN_STEP_M = 2.5 m),
+# so point count ≈ distance / 2.5 m: 100,000 positions covers a ~250 km trace,
+# beyond any run the API otherwise accepts, while still rejecting
+# multi-hundred-MB hostile geometry. At ~40 bytes per JSON position the cap
+# bounds geometry at ~4 MB, in line with the platform's request-body limit;
+# the JSON is still fully parsed before validation, so a proxy-level body
+# limit remains the first line of defense. Note: this bound also applies to
+# response models sharing this schema, so it must never be lowered below the
+# largest geometry already persisted.
+MAX_LINESTRING_COORDINATES = 100_000
+
+
 class LineStringGeometry(BaseModel):
-    """Minimal GeoJSON LineString — the only geometry RouteGrade stores."""
+    """Minimal GeoJSON LineString — the only geometry RouteGrade stores.
+
+    `coordinates` is bounded to `MAX_LINESTRING_COORDINATES` positions so
+    user-supplied GPS traces cannot be used for payload-size abuse; see the
+    constant's comment for the sizing rationale.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["LineString"]
-    coordinates: list[list[float]] = Field(min_length=2)
+    coordinates: list[list[float]] = Field(
+        min_length=2, max_length=MAX_LINESTRING_COORDINATES
+    )
 
     @field_validator("coordinates")
     @classmethod

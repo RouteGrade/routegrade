@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref, but never cancel main.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  api:
+    name: API (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up uv + Python 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      # No env vars needed: tests/conftest.py sets safe dummy defaults
+      # (in-memory SQLite, stub Supabase URLs) before app settings load.
+      - name: Pytest
+        run: uv run pytest
+
+  web:
+    name: Web (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      # Dummy values only — the build needs the vars to exist, not to be real.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_dummy
+
+  analytics:
+    name: Analytics (dbt parse)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: analytics/routegrade_dbt
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/analytics/routegrade_dbt/ci-profiles
+      # Dummy credentials — `dbt parse` never opens a database connection,
+      # but the profile's env_var() lookups must resolve.
+      DBT_POSTGRES_HOST: localhost
+      DBT_POSTGRES_USER: ci
+      DBT_POSTGRES_PASSWORD: ci
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        # Floor 1.10: the `arguments:` test-config nesting in the model yml
+        # files is dbt 1.10+ syntax and fails parse on older versions.
+        run: pip install "dbt-core>=1.10,<2" "dbt-postgres>=1.10,<2"
+
+      # Reuse the committed example profile so CI also validates its shape.
+      - name: Create CI profile
+        run: |
+          mkdir -p ci-profiles
+          cp profiles.yml.example ci-profiles/profiles.yml
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt parse
+        run: dbt parse
