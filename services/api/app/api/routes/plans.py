@@ -12,14 +12,17 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.rate_limit import RateLimiter, get_limiter
+from app.db.session import get_db
 from app.providers.base import AddressNotFound, ProviderError
 from app.providers.elevation import OpenElevationClient
 from app.providers.geocoding import NominatimGeocoder
 from app.providers.routing import OSRMRoutingEngine
 from app.schemas.routes import PlanRequest, PlanResponse
+from app.services.plan_cache import PlanCache
 from app.services.route_planner import RoutePlanner
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
@@ -117,13 +120,27 @@ def enforce_plan_rate_limit(request: Request) -> None:
         )
 
 
+def get_plan_cache(
+    settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[Session, Depends(get_db)],
+) -> PlanCache:
+    """Session-scoped cache handle. Disabled instances short-circuit both calls."""
+
+    return PlanCache(
+        db,
+        enabled=settings.route_plan_cache_enabled,
+        ttl_hours=settings.route_plan_cache_ttl_hours,
+    )
+
+
 @router.post("/plan", response_model=PlanResponse, dependencies=[Depends(enforce_plan_rate_limit)])
 def plan_route(
     payload: PlanRequest,
     planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+    cache: Annotated[PlanCache, Depends(get_plan_cache)],
 ) -> PlanResponse:
     try:
-        return planner.plan(payload)
+        return planner.plan(payload, cache=cache)
     except AddressNotFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

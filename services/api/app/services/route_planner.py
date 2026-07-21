@@ -21,6 +21,7 @@ from app.schemas.routes import (
     StartPoint,
 )
 from app.services import scoring
+from app.services.plan_cache import PlanCache, build_cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +45,23 @@ class RoutePlanner:
         self._elevation = elevation
         self._tolerance = distance_tolerance
 
-    def plan(self, request: PlanRequest) -> PlanResponse:
+    def plan(self, request: PlanRequest, *, cache: PlanCache | None = None) -> PlanResponse:
         start = self._resolve_start(request)
+
+        # Cache lookup happens AFTER geocoding so the key is a stable function
+        # of bucketed coordinates, not free-text address. See PlanCache and
+        # docs/routing-setup.md for the rationale.
+        cache_key: str | None = None
+        if cache is not None and cache.enabled:
+            cache_key = build_cache_key(
+                latitude=start.latitude,
+                longitude=start.longitude,
+                distance_km=request.distance_km,
+                preference=request.preference,
+            )
+            cached = cache.lookup(cache_key)
+            if cached is not None:
+                return cached
 
         candidates: list[PlannedRoute] = []
         last_error: ProviderError | None = None
@@ -64,7 +80,7 @@ class RoutePlanner:
         # Prefer in-tolerance routes, then higher scores.
         candidates.sort(key=lambda r: (not r.within_tolerance, -r.score))
 
-        return PlanResponse(
+        response = PlanResponse(
             start=StartPoint(
                 latitude=start.latitude, longitude=start.longitude, label=start.label
             ),
@@ -73,6 +89,11 @@ class RoutePlanner:
             distance_tolerance=self._tolerance,
             routes=candidates,
         )
+
+        if cache is not None and cache_key is not None:
+            cache.store(cache_key, response)
+
+        return response
 
     def _resolve_start(self, request: PlanRequest) -> GeocodeResult:
         if request.latitude is not None and request.longitude is not None:

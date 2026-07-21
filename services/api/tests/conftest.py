@@ -22,6 +22,10 @@ os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000")
 # Tests use the in-memory limiter unless a test explicitly installs another
 # backend on app.state. Prevents accidental DB round-trips in the /plan path.
 os.environ.setdefault("RATE_LIMIT_USE_POSTGRES", "false")
+# Disable the planner cache by default: existing tests reuse the same request
+# shape across independent stub planners and rely on each call re-computing.
+# The cache-specific suite (test_plan_cache*.py) opts back in explicitly.
+os.environ.setdefault("ROUTE_PLAN_CACHE_ENABLED", "false")
 
 import jwt  # noqa: E402
 from cryptography.hazmat.primitives import serialization  # noqa: E402
@@ -33,6 +37,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.db.models.route_plan_cache import RoutePlanCache  # noqa: E402
 from app.db.models.run import Run  # noqa: E402
 from app.db.models.saved_route import SavedRoute  # noqa: E402
 from app.db.models.user_profile import UserProfile  # noqa: E402
@@ -114,6 +119,7 @@ def _make_test_engine():
     UserProfile.__table__.create(bind=engine)
     SavedRoute.__table__.create(bind=engine)
     Run.__table__.create(bind=engine)
+    RoutePlanCache.__table__.create(bind=engine)
     return engine
 
 

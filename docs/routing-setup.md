@@ -25,6 +25,8 @@ scoring** and returns scored GeoJSON loops.
 | `ELEVATION_BASE_URL` | `https://api.open-elevation.com` | Any Open-Elevation-compatible endpoint. |
 | `PROVIDER_TIMEOUT_SECONDS` | `10` | Per outbound call. |
 | `ROUTE_PLAN_DISTANCE_TOLERANCE` | `0.10` | Documented ±10% target; out-of-tolerance candidates are flagged, not hidden. |
+| `ROUTE_PLAN_CACHE_ENABLED` | `true` | Transparent read-through cache in `public.route_plans`. Keyed on bucketed coordinates (3 decimals ≈ 110m) + distance + preference. |
+| `ROUTE_PLAN_CACHE_TTL_HOURS` | `24` | Cached-entry lifetime. Expiration is lazy; a follow-up sweep can `DELETE ... WHERE expires_at < now()`. |
 
 ## Self-hosting OSRM (production / offline dev)
 
@@ -55,7 +57,13 @@ then flags anything outside the configured ±10% tolerance). Three seed bearings
 
 - **Per-IP rate limiting on `/v1/routes/plan`.** The endpoint is public and each
   call fans out to three external providers. Do not launch publicly without it.
-- **Plan caching.** Identical `(start, distance, preference)` requests should
-  reuse a computed route (lightweight `route_plans` cache table) to cut
-  provider spend.
 - **OSM data currency audit for Toronto** before committing to OSM-only inputs.
+
+## Shipped
+
+- **Plan caching** — `route_plans` cache table (Alembic revision
+  `0005_create_route_plans_cache`). Transparent read-through cache keyed on
+  bucketed coordinates + distance + preference. Ships enabled by default; a
+  founder need only run `alembic upgrade head` against production for the
+  table to exist. See `app/services/plan_cache.py` for the TODO on a
+  background sweep for expired rows.

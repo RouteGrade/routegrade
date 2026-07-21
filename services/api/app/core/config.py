@@ -91,6 +91,21 @@ class Settings(BaseSettings):
         default=0.10,
         description="Accepted relative deviation between requested and generated distance",
     )
+    route_plan_cache_enabled: bool = Field(
+        default=True,
+        description=(
+            "Read-through cache for identical `/plan` requests. Keyed on bucketed "
+            "start coordinates + distance + preference so repeats reuse the "
+            "computed loops instead of re-hitting the three external providers."
+        ),
+    )
+    route_plan_cache_ttl_hours: int = Field(
+        default=24,
+        description=(
+            "Cached plan lifetime in hours. Lazy expiration on read; background "
+            "sweep is a documented follow-up (see app/services/plan_cache.py)."
+        ),
+    )
     route_plan_rate_limit_per_minute: int = Field(
         default=10,
         description="Sustained per-IP requests/minute on /v1/routes/plan; 0 disables limiting",
