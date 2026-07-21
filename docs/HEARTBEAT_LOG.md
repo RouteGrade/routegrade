@@ -13,6 +13,29 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 03:05 (run 3, founder-triggered — MVP 6 approved)
+- **Did**: Founder approved MVP 6 = ALL THREE scopes (A+B+C), order C → A → B;
+  recorded in DECISIONS.md, MS6.md written, backlog re-planned into phases,
+  approvals file converted to a "founder actions needed" list. Then executed
+  three P1s in parallel on branch `heartbeat/2026-07-21-ms6-kickoff`
+  (commit `13589c3`, pushed, NOT merged): (1) director-of-data shipped dbt
+  runs models (source + stg_runs excluding GPS trace, dim_runs,
+  fct_runs_daily, schema + singular tests); (2) security-engineer audited the
+  MVP 5 surface — RLS/authz/injection/mass-assignment verified safe, one HIGH
+  fixed (GPS trace position cap, now 100k after review sizing) — remaining
+  findings queued P2/P3; (3) devops-engineer added GitHub Actions CI (api,
+  web, analytics jobs). Staff-engineer reviewed the combined diff: APPROVE
+  with 4 should-fixes, all applied (cap resized w/ distance-gated rationale,
+  CI push filter to main, contents:read, dbt version floor 1.10).
+- **Verified**: 82 API tests pass post-fixes, ruff clean, web lint+build
+  clean, dbt parse clean, CI YAML validated (workflow itself can't run until
+  the branch is merged).
+- **Queued**: P2 XFF rate-limit-key fix, P3 security hardening batch.
+- **Blocked on founder**: merge branches `heartbeat/2026-07-21-doc-staleness`
+  and `heartbeat/2026-07-21-ms6-kickoff` (no `gh` CLI, so no PRs — merge via
+  GitHub UI or ask me); 4 founder actions in PENDING_APPROVALS.md — Supabase
+  allow-list (urgent), OSRM host, Upstash creds, tile provider key.
+
 ## 2026-07-21 03:00 (run 2, founder-triggered)
 - **Did**: Two P1s in parallel. (1) technical-writer fixed doc staleness:
   README truth-up MVP 3 → MVP 5 (status, architecture diagram, ownership

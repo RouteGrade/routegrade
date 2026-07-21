@@ -9,15 +9,6 @@ Format: `- [ ] P<1-3> <item> — owner: <agent> (context/links)`
 
 ## Now (Phase C kickoff + carried-over P1s)
 
-- [ ] P1 Add dbt models for runs: `routegrade_ops.runs` source, `stg_runs`
-  dropping GPS trace/PII (mirroring `stg_saved_routes`), `dim_runs` +
-  `fct_runs_daily` marts with schema tests — owner: director-of-data
-- [ ] P1 Security review of the MVP 5 surface: verify owner-only RLS on
-  `public.runs`, request-size limits on GPS trace payloads, rate limiting on
-  runs endpoints — owner: security-engineer
-- [ ] P1 CI: GitHub Actions running `uv run pytest` + `ruff check`
-  (services/api), `pnpm lint` + `pnpm build` (apps/web), `dbt parse`
-  (analytics) on every push — owner: devops-engineer
 - [ ] P1 Redis/Upstash rate limiter backend behind the existing `check()`
   interface in `app/core/rate_limit.py`, env-configured with in-memory
   fallback; extend coverage to runs + saved-routes endpoints — owner:
@@ -29,6 +20,9 @@ Format: `- [ ] P<1-3> <item> — owner: <agent> (context/links)`
 
 ## Next (Phase C completion)
 
+- [ ] P2 Fix rate-limit client key in `plans.py`: leftmost `X-Forwarded-For`
+  is client-controllable on Vercel (limiter bypass) — use the platform's
+  trusted client-IP header — owner: security-engineer (2026-07-21 audit)
 - [ ] P2 `route_plans` cache table (Alembic additive migration) keyed on
   `(start, distance, preference)` — owner: staff-engineer
 - [ ] P2 Tile provider style URL behind env var (OpenFreeMap default for dev),
@@ -51,9 +45,23 @@ Format: `- [ ] P<1-3> <item> — owner: <agent> (context/links)`
   sharing; PostGIS + `/v1/routes/nearby`; discover page; abuse basics;
   share analytics (gated on tile provider + Phase A explanation UI)
 
+- [ ] P3 Security hardening batch (2026-07-21 audit): FORCE ROW LEVEL SECURITY
+  on runs/saved_routes (director-of-data); body-size limit middleware as
+  defense-in-depth; make run upsert insert race-safe (IntegrityError → 409);
+  UTC-explicit date casts in dim models — owners: various
+
 ## Icebox
 
 ## Done
+
+- [x] P1 dbt runs models — source, stg_runs (PII excluded), dim_runs,
+  fct_runs_daily + tests (2026-07-21 run 3, director-of-data; branch
+  heartbeat/2026-07-21-ms6-kickoff)
+- [x] P1 MVP 5 security review — no critical/high open: RLS verified, GPS
+  trace capped at 100k positions with tests; findings queued as P2/P3
+  (2026-07-21 run 3, security-engineer; same branch)
+- [x] P1 CI — GitHub Actions, 3 parallel jobs, all commands dry-run green
+  (2026-07-21 run 3, devops-engineer; same branch)
 
 - [x] P1 Fix doc staleness — README to MVP 5 + new `milestones/MS5.md`
   (2026-07-21 run 2, technical-writer; branch
