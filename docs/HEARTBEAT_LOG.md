@@ -13,6 +13,25 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 03:00 (run 2, founder-triggered)
+- **Did**: Two P1s in parallel. (1) technical-writer fixed doc staleness:
+  README truth-up MVP 3 → MVP 5 (status, architecture diagram, ownership
+  table, repo tree, env vars, known limitations) and new `milestones/MS5.md`
+  — on branch `heartbeat/2026-07-21-doc-staleness` (commit `3fe9ce8`), pushed,
+  NOT merged. `gh` CLI unavailable, so no PR was opened — founder should open/
+  merge the branch manually. (2) head-of-product delivered the full MVP 6
+  scope proposal — the placeholder entry in `PENDING_APPROVALS.md` is replaced
+  by three detailed options (A: scoring v2 + feedback loop, B: social/sharing,
+  C: production hardening) with effort, risks, and dependencies.
+  Recommendation: Option A, gated on approving the OSRM `foot` profile first.
+- **Verified**: services/api `uv run pytest` 80 passed, `ruff check` clean;
+  apps/web `pnpm lint` + `pnpm build` clean (run by technical-writer against
+  the branch). Diff reviewed by orchestrator; docs-only, no code paths touched.
+- **Queued**: nothing new; MVP 6 entry upgraded from placeholder to decidable.
+- **Blocked**: branch merge + all 6 approval verdicts await the founder. Most
+  urgent remain: Supabase redirect allow-list (production sign-in broken) and
+  OSRM foot profile (gates the recommended MVP 6).
+
 ## 2026-07-21 02:27
 - **Did**: First heartbeat run. Head-of-product groomed the backlog against
   actual repo state: reconciled milestone status (code is at MVP 5, docs said

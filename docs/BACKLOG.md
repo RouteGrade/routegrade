@@ -15,9 +15,6 @@ scope proposal pending founder decision.
 
 ## Now
 
-- [ ] P1 Fix doc staleness: update README milestone status, repo-structure tree,
-  and known limitations to reflect MVP 4+5; write `milestones/MS5.md` recording
-  what shipped in `da6bf78` — owner: technical-writer
 - [ ] P1 Add dbt models for runs: `routegrade_ops.runs` source, `stg_runs`
   dropping GPS trace/PII (mirroring `stg_saved_routes`), `dim_runs` +
   `fct_runs_daily` marts with schema tests — owner: director-of-data
@@ -26,10 +23,6 @@ scope proposal pending founder decision.
   `public.runs`, add/verify request-size limits on GPS trace payloads to
   `/v1/users/me/runs`, confirm runs endpoints are rate-limited — owner:
   security-engineer (large user-supplied geometry, shipped fast, never audited)
-- [ ] P1 Draft the MVP 6 scope proposal (2-3 candidate scopes with effort/risk)
-  and file it in `docs/PENDING_APPROVALS.md` for founder decision — owner:
-  head-of-product (the heartbeat has no destination after current cleanup)
-
 ## Next
 
 - [ ] P2 Add a `route_plans` cache table (Alembic additive migration) keyed on
@@ -61,5 +54,11 @@ scope proposal pending founder decision.
 
 ## Done
 
+- [x] P1 Fix doc staleness — README to MVP 5 + new `milestones/MS5.md`
+  (2026-07-21 run 2, technical-writer; branch
+  `heartbeat/2026-07-21-doc-staleness`, awaiting founder merge)
+- [x] P1 Draft MVP 6 scope proposal — filed in `PENDING_APPROVALS.md` with 3
+  options, recommendation: Scoring v2 gated on OSRM foot profile
+  (2026-07-21 run 2, head-of-product)
 - [x] P1 Groom this backlog against the current milestone (2026-07-21 run 1,
   head-of-product)
