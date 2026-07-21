@@ -45,6 +45,16 @@ provisioning; heartbeat should pull from Next.)*
 
 ## Done
 
+- [x] URGENT Postgres-backed rate-limiter — eliminates the Upstash dependency
+  entirely. Factory priority Redis > Postgres > in-memory; DATABASE_URL is
+  the only requirement, already set in prod. Additive migration for
+  `rate_limit_buckets` table with atomic CTE-based UPSERT. Ships bundled
+  with c-config-prep on branch `heartbeat/2026-07-21-prod-fixes`
+  (2026-07-21 run 6, staff-engineer). 118 API tests pass.
+- [x] URGENT Diagnose stale prod API deploy — root cause is Vercel dashboard
+  auto-deploy misconfigured; repo code and Vercel config verified correct;
+  exact founder click path documented in PENDING_APPROVALS #1b (2026-07-21
+  run 6, devops-engineer). No code change.
 - [x] P2 Production smoke test script + docs — 15 unauthenticated checks
   including an explicit "no localhost in login HTML" guard for the auth
   bug that motivated the task; script ran against production and surfaced

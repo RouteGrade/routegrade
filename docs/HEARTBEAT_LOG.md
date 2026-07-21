@@ -13,6 +13,48 @@ Entry format:
 - **Blocked**: anything waiting on the founder
 ```
 
+## 2026-07-21 17:28 (run 6, founder-triggered — "fix production")
+- **Did**: Two parallel workstreams targeting the two prod issues surfaced
+  by run 5's smoke test.
+  - **devops-engineer** diagnosed the stale API deploy: root cause is that
+    Vercel auto-deploy is broken on the dashboard side for the
+    `routegrade-api` project. Confirmed the repo is entirely correct
+    (`main.py` wires the runs router, `api/index.py` re-exports the same
+    app instance, `vercel.json` rewrite is fine, `.vercelignore` excludes
+    nothing important, local reproduction shows all runs endpoints
+    registered). Deployment is frozen at `10558bb` (2026-07-17, MVP 3+4).
+    Fix is founder-only: reconnect Git / clear ignored-build step / click
+    Redeploy. Exact click path filed in PENDING_APPROVALS #1b.
+  - **staff-engineer** eliminated the Upstash blocker by adding a
+    Postgres-backed rate-limiter backend that uses the existing Supabase
+    database. Additive Alembic migration for `rate_limit_buckets`; atomic
+    CTE-based UPSERT with refill math inline; fails open on any DB error.
+    `get_limiter()` factory now Redis > Postgres > in-memory. Since
+    DATABASE_URL is always set in prod, Postgres becomes the default
+    cross-instance limiter with zero founder action.
+- **Merge orchestration**: staff-engineer built Postgres on top of main
+  (pre-c-config-prep), so I merged `c-config-prep` into the prod-fixes
+  branch and reconciled conflicts (in `rate_limit.py`, `plans.py`,
+  `deployment.md`). Also removed a duplicate `upstash_redis_rest_*` field
+  pair in `config.py` that git auto-merged twice. Final branch
+  `heartbeat/2026-07-21-prod-fixes` (commit `a50b104`, pushed) is a
+  superset of c-config-prep: has Redis + Postgres + XFF fix + per-user
+  limits on runs/saved_routes + race-safe upserts + OSRM runbook.
+- **Verified**: `uv run pytest` 118 passed (up from 107 pre-merge, +11 from
+  the c-config-prep tests folding in). `uv run ruff check` clean. No
+  conflict markers left in tree.
+- **Blocked on founder** (unchanged in kind, more urgent in tone):
+  - **THE ONE ACTION THAT UNBLOCKS EVERYTHING**: fix Vercel auto-deploy on
+    the `routegrade-api` project and redeploy from main. Details in
+    PENDING_APPROVALS #1b.
+  - Merge queued heartbeat branches. Recommended: merge
+    `heartbeat/2026-07-21-prod-fixes` — it contains c-config-prep, so
+    c-config-prep can be dropped. Other branches (doc-staleness,
+    ms6-kickoff, fix-auth-localhost-fallback, smoke-test) are independent
+    and can merge in any order.
+  - Supabase redirect allow-list, OSRM host, tile provider key — still
+    queued, all lower urgency now that Postgres unblocks rate limiting.
+
 ## 2026-07-21 16:01 (run 5, cron)
 - **Did**: qa-lead built a production smoke test at `scripts/smoke-test.sh`
   with 15 unauthenticated checks (curl + jq only, no secrets). Notably
