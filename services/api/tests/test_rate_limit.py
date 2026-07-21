@@ -45,11 +45,11 @@ def test_limit_is_per_client_ip(limited_client):
         assert _plan(limited_client).status_code == 200
     assert _plan(limited_client).status_code == 429
 
-    # A different client (via proxy header) still has a full bucket.
+    # A different trusted client IP (rightmost XFF hop) still has a full bucket.
     other = limited_client.post(
         "/v1/routes/plan",
         json={"address": "Toronto", "distance_km": 5},
-        headers={"X-Forwarded-For": "203.0.113.9, 10.0.0.1"},
+        headers={"X-Forwarded-For": "203.0.113.9, 10.0.0.2"},
     )
     assert other.status_code == 200
 

@@ -14,7 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.config import Settings, get_settings
-from app.core.rate_limit import TokenBucketLimiter
+from app.core.rate_limit import RateLimiter, get_limiter
 from app.providers.base import AddressNotFound, ProviderError
 from app.providers.elevation import OpenElevationClient
 from app.providers.geocoding import NominatimGeocoder
@@ -50,23 +50,45 @@ def get_route_planner(
 
 
 @lru_cache(maxsize=1)
-def _default_rate_limiter() -> TokenBucketLimiter | None:
+def _default_rate_limiter() -> RateLimiter | None:
     settings = get_settings()
     if settings.route_plan_rate_limit_per_minute <= 0:
         return None
-    return TokenBucketLimiter(
+    return get_limiter(
         rate_per_minute=settings.route_plan_rate_limit_per_minute,
         capacity=settings.route_plan_rate_limit_per_minute
         + settings.route_plan_rate_limit_burst,
+        settings=settings,
+        upstash_url=settings.upstash_redis_rest_url,
+        upstash_token=settings.upstash_redis_rest_token,
+        key_prefix="rg:rl:plan:",
     )
 
 
 def _client_key(request: Request) -> str:
-    """Client IP, honoring the proxy chain the deployment platform fronts us with."""
+    """Trusted client IP, resistant to X-Forwarded-For spoofing.
+
+    Vercel (and most reverse proxies) *appends* the real client IP to
+    `X-Forwarded-For`, so the leftmost hop is client-controlled and can be
+    used to rotate through fake IPs and bypass per-IP buckets. Preferred
+    signal order:
+
+    1. `x-real-ip` — Vercel populates this with the actual client IP.
+    2. Rightmost `x-forwarded-for` hop — the last proxy to touch us.
+    3. `request.client.host` — direct connection fallback.
+    """
+
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
 
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+        if hops:
+            # Rightmost hop is the last proxy we trust to have written it.
+            return hops[-1]
+
     return request.client.host if request.client else "unknown"
 
 

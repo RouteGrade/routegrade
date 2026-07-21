@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models.saved_route import SavedRoute
@@ -58,7 +59,10 @@ def upsert_for_user(
     if existing_any_owner is None:
         route = SavedRoute(id=route_id, user_id=user_id, **fields)
         session.add(route)
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as exc:  # pragma: no cover — race with a concurrent insert
+            raise RouteIdCollision(route_id) from exc
         return route, True
 
     for key, value in fields.items():

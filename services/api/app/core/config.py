@@ -99,6 +99,46 @@ class Settings(BaseSettings):
         default=5,
         description="Extra burst headroom above the sustained rate",
     )
+    rate_limit_use_postgres: bool = Field(
+        default=True,
+        description=(
+            "Use the Postgres-backed rate limiter when DATABASE_URL is set and "
+            "no Upstash creds are configured. Default true so production gets "
+            "cross-instance limiting with zero founder action; tests/dev disable "
+            "via env to keep the in-memory limiter and avoid a DB round-trip."
+        ),
+    )
+    upstash_redis_rest_url: str | None = Field(
+        default=None,
+        description="Upstash Redis REST endpoint (opt-in; higher-throughput backend)",
+    )
+    upstash_redis_rest_token: str | None = Field(
+        default=None,
+        description="Upstash Redis REST auth token (paired with upstash_redis_rest_url)",
+    )
+
+    # Per-user rate limits on authenticated write endpoints. Both are keyed on
+    # the authenticated user id, so multi-tenant abuse of a single IP does not
+    # starve other users. Defaults are permissive enough for real UI flows
+    # (a runner saving several routes in a burst) but strict enough that a
+    # runaway script hits a wall well before it can DoS the DB.
+    runs_rate_limit_per_minute: int = Field(
+        default=60,
+        description="Sustained per-user PUT /v1/users/me/runs/{id} per minute; 0 disables",
+    )
+    runs_rate_limit_burst: int = Field(
+        default=60,
+        description="Extra burst headroom (capacity = per_minute + burst)",
+    )
+    saved_routes_rate_limit_per_minute: int = Field(
+        default=30,
+        description="Sustained per-user PUT /v1/users/me/routes/{id} per minute; 0 disables",
+    )
+    saved_routes_rate_limit_burst: int = Field(
+        default=30,
+        description="Extra burst headroom (capacity = per_minute + burst)",
+    )
+
 
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod

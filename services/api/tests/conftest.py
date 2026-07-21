@@ -19,6 +19,9 @@ os.environ.setdefault(
 os.environ.setdefault("SUPABASE_JWT_AUDIENCE", "authenticated")
 os.environ.setdefault("SUPABASE_JWT_ALGORITHMS", "RS256")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000")
+# Tests use the in-memory limiter unless a test explicitly installs another
+# backend on app.state. Prevents accidental DB round-trips in the /plan path.
+os.environ.setdefault("RATE_LIMIT_USE_POSTGRES", "false")
 
 import jwt  # noqa: E402
 from cryptography.hazmat.primitives import serialization  # noqa: E402
@@ -139,8 +142,10 @@ def app_with_overrides(jwks_dict: dict[str, Any]):
     # Stub JWKS so no real HTTP call happens during tests.
     app.state.jwks_client = StubJWKSClient(jwks_dict)
 
-    # Disable /plan rate limiting by default; rate-limit tests install their own.
+    # Disable rate limiting by default; rate-limit tests install their own.
     app.state.plan_rate_limiter = None
+    app.state.runs_rate_limiter = None
+    app.state.saved_routes_rate_limiter = None
 
     # Use a fresh in-memory SQLite for each test.
     engine = _make_test_engine()
