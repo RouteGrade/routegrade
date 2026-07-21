@@ -14,7 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.config import Settings, get_settings
-from app.core.rate_limit import TokenBucketLimiter
+from app.core.rate_limit import RateLimiter, get_limiter
 from app.providers.base import AddressNotFound, ProviderError
 from app.providers.elevation import OpenElevationClient
 from app.providers.geocoding import NominatimGeocoder
@@ -50,14 +50,13 @@ def get_route_planner(
 
 
 @lru_cache(maxsize=1)
-def _default_rate_limiter() -> TokenBucketLimiter | None:
+def _default_rate_limiter() -> RateLimiter | None:
     settings = get_settings()
-    if settings.route_plan_rate_limit_per_minute <= 0:
-        return None
-    return TokenBucketLimiter(
+    return get_limiter(
         rate_per_minute=settings.route_plan_rate_limit_per_minute,
         capacity=settings.route_plan_rate_limit_per_minute
         + settings.route_plan_rate_limit_burst,
+        settings=settings,
     )
 
 

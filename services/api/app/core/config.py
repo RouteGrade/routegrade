@@ -99,6 +99,23 @@ class Settings(BaseSettings):
         default=5,
         description="Extra burst headroom above the sustained rate",
     )
+    rate_limit_use_postgres: bool = Field(
+        default=True,
+        description=(
+            "Use the Postgres-backed rate limiter when DATABASE_URL is set and "
+            "no Upstash creds are configured. Default true so production gets "
+            "cross-instance limiting with zero founder action; tests/dev disable "
+            "via env to keep the in-memory limiter and avoid a DB round-trip."
+        ),
+    )
+    upstash_redis_rest_url: str | None = Field(
+        default=None,
+        description="Upstash Redis REST endpoint (opt-in; higher-throughput backend)",
+    )
+    upstash_redis_rest_token: str | None = Field(
+        default=None,
+        description="Upstash Redis REST auth token (paired with upstash_redis_rest_url)",
+    )
 
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod

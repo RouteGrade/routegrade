@@ -19,6 +19,9 @@ os.environ.setdefault(
 os.environ.setdefault("SUPABASE_JWT_AUDIENCE", "authenticated")
 os.environ.setdefault("SUPABASE_JWT_ALGORITHMS", "RS256")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000")
+# Tests use the in-memory limiter unless a test explicitly installs another
+# backend on app.state. Prevents accidental DB round-trips in the /plan path.
+os.environ.setdefault("RATE_LIMIT_USE_POSTGRES", "false")
 
 import jwt  # noqa: E402
 from cryptography.hazmat.primitives import serialization  # noqa: E402

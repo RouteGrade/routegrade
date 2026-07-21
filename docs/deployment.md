@@ -39,17 +39,39 @@ web production URL. Changing an env var requires a redeploy to take effect.
   Supabase → Authentication → URL Configuration, or Google / magic-link
   sign-in will bounce back to localhost in production.
 
+## Rate limiting backends
+
+`/v1/routes/plan` uses a token-bucket rate limiter with three interchangeable
+backends. The API picks one at startup based on environment variables — **no
+founder action is required to get cross-instance rate limiting**, because a
+production deploy already has `DATABASE_URL` set.
+
+| Backend | When active | Cross-instance? | Extra setup |
+| --- | --- | --- | --- |
+| **In-memory** | Local dev, tests | No | None (default when `DATABASE_URL` is unset) |
+| **Postgres** (default) | Production | Yes | None — reuses `DATABASE_URL` |
+| **Redis / Upstash** | High-throughput opt-in | Yes | Set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` |
+
+Selection priority is: Upstash creds > Postgres > in-memory. To force the
+in-memory backend for local development, set `RATE_LIMIT_USE_POSTGRES=false`.
+
+The Postgres backend stores bucket state in `public.rate_limit_buckets`
+(migration `0004_create_rate_limit_buckets`). Each `check()` is a single
+atomic `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`, so two concurrent
+requests on the same key cannot both spend the last token: the UPSERT takes
+a `ROW EXCLUSIVE` lock on the conflicting row and the second call blocks
+until the first commits. All infrastructure failures (statement timeout,
+connection loss) log a warning and **fail open** — rate limiting must never
+take the site offline.
+
 ## Known serverless caveats
 
-1. **Rate limiting is per-instance.** The `/plan` token bucket lives in process
-   memory; Vercel may run several instances, so the effective global limit is
-   `limit × instances` and resets on cold starts. Acceptable for MVP 4 —
-   swap the storage for Redis/Upstash behind the same `check()` interface when
-   it matters.
-2. **Cold starts** add ~1-2 s to the first request on an idle function.
-3. **Provider defaults are still the public demo endpoints** (Nominatim public
+1. **Cold starts** add ~1-2 s to the first request on an idle function.
+2. **Provider defaults are still the public demo endpoints** (Nominatim public
    instance, OSRM demo with the driving profile). Self-host OSRM (`foot`) and
    point `OSRM_BASE_URL` at it before promoting beyond a demo audience — see
    `docs/routing-setup.md`.
-4. The database connection uses a fresh pool per instance; keep using the
-   Supabase pooled connection string.
+3. The database connection uses a fresh pool per instance; keep using the
+   Supabase pooled connection string. Rate-limit checks reuse the same pool
+   in short-lived AUTOCOMMIT transactions so they cannot be rolled back by a
+   caller's outer transaction.
