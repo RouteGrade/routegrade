@@ -15,7 +15,9 @@ export type PlannedRoute = {
   geometry: LineStringGeometry;
   distance_km: number;
   elevation_gain_m: number;
-  intersections_per_km: number;
+  // null when the metric is unknown — e.g. a legacy saved route reopened
+  // before intersection density was persisted.
+  intersections_per_km: number | null;
   sidewalk_coverage: number | null;
   score: number;
   grade: "A" | "B" | "C" | "D";
@@ -47,6 +49,8 @@ export type SavedRoute = {
   preference: Preference;
   geometry: LineStringGeometry;
   elevation_gain_m: number;
+  // null for legacy routes saved before intersection density was persisted.
+  intersections_per_km: number | null;
   score: number;
   grade: "A" | "B" | "C" | "D";
   created_at: string;

@@ -34,6 +34,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.models.run import Run  # noqa: E402
+from app.db.models.run_rating import RunRating  # noqa: E402
 from app.db.models.saved_route import SavedRoute  # noqa: E402
 from app.db.models.user_profile import UserProfile  # noqa: E402
 from app.db.session import get_db  # noqa: E402
@@ -114,6 +115,7 @@ def _make_test_engine():
     UserProfile.__table__.create(bind=engine)
     SavedRoute.__table__.create(bind=engine)
     Run.__table__.create(bind=engine)
+    RunRating.__table__.create(bind=engine)
     return engine
 
 

@@ -16,6 +16,7 @@ import {
   type Preference,
 } from "@/lib/api/routes-client";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
+import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
 import type { RunTelemetry } from "./run-tracker";
 
@@ -131,6 +132,8 @@ export default function RouteExplorer({
   // Live run mode: the planner UI hides and RunTracker takes over the screen.
   const [runMode, setRunMode] = useState(false);
   const [runTelemetry, setRunTelemetry] = useState<RunTelemetry | null>(null);
+  // Shareable scorecard overlay — private until the user explicitly opens it.
+  const [scorecardOpen, setScorecardOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +171,9 @@ export default function RouteExplorer({
             geometry: saved.geometry,
             distance_km: saved.distance_km,
             elevation_gain_m: saved.elevation_gain_m,
-            intersections_per_km: 0,
+            // Real persisted value, or null for legacy routes saved before the
+            // metric was stored (scorecard omits the crossings reason then).
+            intersections_per_km: saved.intersections_per_km,
             sidewalk_coverage: null,
             score: saved.score,
             grade: saved.grade,
@@ -284,6 +289,7 @@ export default function RouteExplorer({
         preference,
         geometry: active.route.geometry,
         elevation_gain_m: active.route.elevation_gain_m,
+        intersections_per_km: active.route.intersections_per_km,
         score: active.route.score,
         grade: active.route.grade,
       });
@@ -558,6 +564,17 @@ export default function RouteExplorer({
                 </svg>
                 Start run
               </button>
+              <button
+                type="button"
+                onClick={() => setScorecardOpen(true)}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <path d="M16 6l-4-4-4 4M12 2v13" />
+                </svg>
+                Share scorecard
+              </button>
               {isAuthenticated ? (
                 <button
                   type="button"
@@ -608,6 +625,12 @@ export default function RouteExplorer({
             name: active.route.name,
             geometry: active.route.geometry,
             distance_km: active.route.distance_km,
+            grade: active.route.grade,
+            score: active.route.score,
+            elevation_gain_m: active.route.elevation_gain_m,
+            intersections_per_km: active.route.intersections_per_km,
+            sidewalk_coverage: active.route.sidewalk_coverage,
+            preference,
           }}
           isAuthenticated={isAuthenticated}
           onExit={() => {
@@ -615,6 +638,21 @@ export default function RouteExplorer({
             setRunTelemetry(null);
           }}
           onTelemetry={setRunTelemetry}
+        />
+      )}
+
+      {scorecardOpen && active && (
+        <RouteScorecard
+          route={{
+            name: active.route.name,
+            grade: active.route.grade,
+            score: active.route.score,
+            distance_km: active.route.distance_km,
+            elevation_gain_m: active.route.elevation_gain_m,
+            intersections_per_km: active.route.intersections_per_km,
+            sidewalk_coverage: active.route.sidewalk_coverage,
+          }}
+          onClose={() => setScorecardOpen(false)}
         />
       )}
     </div>

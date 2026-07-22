@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/authenticated-client";
-import type { LineStringGeometry } from "@/lib/api/routes-client";
+import { saveRunRating } from "@/lib/api/run-ratings-client";
+import type { LineStringGeometry, Preference } from "@/lib/api/routes-client";
 import { saveRun, type RunSplit } from "@/lib/api/runs-client";
 import {
   formatDuration,
@@ -14,6 +15,9 @@ import {
   spokenPace,
   type LngLat,
 } from "@/lib/geo";
+import type { Grade } from "@/lib/scorecard";
+import { RouteScorecard } from "./route-scorecard";
+import { EMPTY_RATING, hasRating, RunRating, type RatingDraft } from "./run-rating";
 
 /** Route metadata the tracker needs — planned and saved routes both satisfy it. */
 export type RunnableRoute = {
@@ -21,6 +25,13 @@ export type RunnableRoute = {
   name: string;
   geometry: LineStringGeometry;
   distance_km: number;
+  /** Grade snapshot — present for graded routes, enables rating + scorecard. */
+  grade?: Grade;
+  score?: number;
+  elevation_gain_m?: number;
+  intersections_per_km?: number | null;
+  sidewalk_coverage?: number | null;
+  preference?: Preference;
 };
 
 export type RunTelemetry = {
@@ -100,6 +111,8 @@ export default function RunTracker({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [rating, setRating] = useState<RatingDraft>(EMPTY_RATING);
+  const [scorecardOpen, setScorecardOpen] = useState(false);
 
   const routeCoords = useMemo(
     () => route.geometry.coordinates as LngLat[],
@@ -379,9 +392,10 @@ export default function RunTracker({
     setSaveError(null);
     const durationS = Math.max(1, Math.round(movingMsRef.current / 1000));
     const km = distanceRef.current / 1000;
+    const routeId = /^[0-9a-f-]{36}$/i.test(route.id) ? route.id : null;
     try {
       await saveRun(runIdRef.current, {
-        route_id: /^[0-9a-f-]{36}$/i.test(route.id) ? route.id : null,
+        route_id: routeId,
         route_name: route.name,
         started_at: startedAtRef.current ?? new Date().toISOString(),
         duration_s: durationS,
@@ -393,6 +407,24 @@ export default function RunTracker({
             ? { type: "LineString", coordinates: traveledRef.current }
             : null,
       });
+      // If the runner rated the route, persist that alongside the run. Keyed on
+      // the same run id, so it lands on the run we just saved. A rating failure
+      // must not fail the run save the runner just confirmed.
+      if (hasRating(rating)) {
+        try {
+          await saveRunRating(runIdRef.current, {
+            overall: rating.overall,
+            grade_match: rating.gradeMatch,
+            tags: rating.tags,
+            route_id: routeId,
+            graded_score: route.score ?? null,
+            graded_grade: route.grade ?? null,
+            preference: route.preference ?? null,
+          });
+        } catch {
+          // Swallow — the run itself saved; the rating is best-effort.
+        }
+      }
       setSaved(true);
     } catch (err) {
       setSaveError(
@@ -628,6 +660,12 @@ export default function RunTracker({
                   </div>
                 )}
 
+                {isAuthenticated && !saved && (
+                  <div className="mt-4">
+                    <RunRating value={rating} onChange={setRating} disabled={saving} />
+                  </div>
+                )}
+
                 <div className="mt-5 flex flex-col gap-2">
                   {isAuthenticated ? (
                     <button
@@ -645,10 +683,12 @@ export default function RunTracker({
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                             <path d="M20 6 9 17l-5-5" />
                           </svg>
-                          Saved to your account
+                          {hasRating(rating) ? "Saved with your rating" : "Saved to your account"}
                         </>
                       ) : saving ? (
                         "Saving…"
+                      ) : hasRating(rating) ? (
+                        "Save run & rating"
                       ) : (
                         "Save this run"
                       )}
@@ -658,13 +698,26 @@ export default function RunTracker({
                       href="/login?next=/"
                       className="flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
                     >
-                      Sign in to save this run
+                      Sign in to save &amp; rate this run
                     </Link>
                   )}
                   {saveError && (
                     <p role="alert" className="text-center text-xs text-rose-400">
                       {saveError}
                     </p>
+                  )}
+                  {route.grade && (
+                    <button
+                      type="button"
+                      onClick={() => setScorecardOpen(true)}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                        <path d="M16 6l-4-4-4 4M12 2v13" />
+                      </svg>
+                      Share scorecard
+                    </button>
                   )}
                   <button
                     type="button"
@@ -678,6 +731,23 @@ export default function RunTracker({
             </div>
           )}
         </>
+      )}
+
+      {scorecardOpen && route.grade && (
+        <div className="pointer-events-auto">
+          <RouteScorecard
+            route={{
+              name: route.name,
+              grade: route.grade,
+              score: route.score ?? 0,
+              distance_km: route.distance_km,
+              elevation_gain_m: route.elevation_gain_m ?? 0,
+              intersections_per_km: route.intersections_per_km ?? null,
+              sidewalk_coverage: route.sidewalk_coverage ?? null,
+            }}
+            onClose={() => setScorecardOpen(false)}
+          />
+        </div>
       )}
     </div>
   );

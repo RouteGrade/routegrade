@@ -106,7 +106,6 @@ class RoutePlanner:
             distance_km=generated.distance_km,
             elevation_gain_m=gain,
             intersections_per_km=generated.intersections_per_km,
-            sidewalk_coverage=generated.sidewalk_coverage,
             preference=request.preference,
         )
 

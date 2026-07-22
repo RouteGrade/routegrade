@@ -160,6 +160,64 @@ body {
   animation: float-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* --- Shareable scorecard --- */
+
+/* Grade letter springs in on reveal */
+.scorecard-grade {
+  animation: scorecard-grade-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes scorecard-grade-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* A single tasteful light sweep across the grade banner */
+.scorecard-sheen {
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 48%,
+    transparent 66%
+  );
+  transform: translateX(-120%);
+  animation: scorecard-sheen 1.15s ease-out 0.35s both;
+}
+
+@keyframes scorecard-sheen {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+/* Reasons stagger in (per-item delay set inline) */
+.scorecard-reason {
+  animation: float-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scorecard-grade,
+  .scorecard-sheen,
+  .scorecard-reason,
+  .animate-float-in,
+  .run-countdown {
+    animation: none;
+  }
+  .scorecard-sheen {
+    display: none;
+  }
+}
+
 /* Distance slider */
 input[type="range"].rg-slider {
   appearance: none;

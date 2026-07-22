@@ -123,6 +123,55 @@ class TestSaveAndList:
         assert mine.json()["name"] == "North loop · 5.1 km"
 
 
+class TestIntersectionDensity:
+    def test_persists_and_reads_back_intersection_density(self, client, auth_headers):
+        user = str(uuid.uuid4())
+        route_id = str(uuid.uuid4())
+
+        created = client.put(
+            f"/v1/users/me/routes/{route_id}",
+            json=_route_payload(intersections_per_km=6.5),
+            headers=auth_headers(user),
+        )
+        assert created.status_code == 201
+        assert created.json()["route"]["intersections_per_km"] == 6.5
+
+        # Survives a re-read (list + get) so reopening a saved route sees it.
+        fetched = client.get(
+            f"/v1/users/me/routes/{route_id}", headers=auth_headers(user)
+        )
+        assert fetched.json()["intersections_per_km"] == 6.5
+
+        listed = client.get("/v1/users/me/routes", headers=auth_headers(user)).json()
+        assert listed["routes"][0]["intersections_per_km"] == 6.5
+
+    def test_legacy_route_without_value_reads_as_null(self, client, auth_headers):
+        """A payload that omits the metric (older client) stores/reads NULL."""
+        user = str(uuid.uuid4())
+        route_id = str(uuid.uuid4())
+
+        created = client.put(
+            f"/v1/users/me/routes/{route_id}",
+            json=_route_payload(),  # no intersections_per_km key
+            headers=auth_headers(user),
+        )
+        assert created.status_code == 201
+        assert created.json()["route"]["intersections_per_km"] is None
+
+        fetched = client.get(
+            f"/v1/users/me/routes/{route_id}", headers=auth_headers(user)
+        )
+        assert fetched.json()["intersections_per_km"] is None
+
+    def test_negative_intersection_density_rejected(self, client, auth_headers):
+        res = client.put(
+            f"/v1/users/me/routes/{uuid.uuid4()}",
+            json=_route_payload(intersections_per_km=-1.0),
+            headers=auth_headers(str(uuid.uuid4())),
+        )
+        assert res.status_code == 422
+
+
 class TestDelete:
     def test_delete_then_404(self, client, auth_headers):
         user = str(uuid.uuid4())

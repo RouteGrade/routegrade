@@ -38,6 +38,12 @@ class SavedRoute(Base):
     preference: Mapped[str] = mapped_column(String, nullable=False)
     geometry: Mapped[dict[str, Any]] = mapped_column(_GeometryJSON, nullable=False)
     elevation_gain_m: Mapped[Decimal] = mapped_column(Numeric(6, 1), nullable=False)
+    # Intersection density (maneuvers per km). Nullable: legacy rows saved
+    # before this column existed have no value, which downstream treats as
+    # UNKNOWN rather than a real "few crossings" signal.
+    intersections_per_km: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2), nullable=True
+    )
     score: Mapped[Decimal] = mapped_column(Numeric(4, 1), nullable=False)
     grade: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

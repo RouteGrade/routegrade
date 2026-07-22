@@ -91,6 +91,9 @@ class SavedRouteSave(BaseModel):
     preference: Preference
     geometry: LineStringGeometry
     elevation_gain_m: float = Field(ge=0)
+    # Optional so older clients / free routes without the metric still save;
+    # persisted so the scorecard can show the real crossings reason on reopen.
+    intersections_per_km: float | None = Field(default=None, ge=0)
     score: float = Field(ge=0, le=100)
     grade: Literal["A", "B", "C", "D"]
 
@@ -113,6 +116,7 @@ class SavedRouteRead(BaseModel):
     preference: Preference
     geometry: LineStringGeometry
     elevation_gain_m: float
+    intersections_per_km: float | None
     score: float
     grade: Literal["A", "B", "C", "D"]
     created_at: datetime
