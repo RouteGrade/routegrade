@@ -37,12 +37,13 @@ export function pathLengthMeters(coords: LngLat[]): number {
 /**
  * Project `point` onto the polyline, in a local equirectangular frame (fine
  * for the sub-km scales of a run). Returns the distance from the point to the
- * route in meters and how far along the route the closest spot is.
+ * route in meters, how far along the route the closest spot is, and the
+ * closest spot itself (e.g. for framing a map camera around the gap).
  */
 export function projectOntoPath(
   point: LngLat,
   coords: LngLat[],
-): { distanceToPathM: number; alongPathM: number } {
+): { distanceToPathM: number; alongPathM: number; nearestPoint: LngLat } {
   const cosLat = Math.cos(toRad(point[1]));
   const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M;
   const mPerDegLng = mPerDegLat * cosLat;
@@ -52,6 +53,7 @@ export function projectOntoPath(
 
   let best = Number.POSITIVE_INFINITY;
   let bestAlong = 0;
+  let bestPoint: LngLat = coords[0] ?? point;
   let cumulative = 0;
 
   for (let i = 1; i < coords.length; i++) {
@@ -70,12 +72,19 @@ export function projectOntoPath(
     if (dist < best) {
       best = dist;
       bestAlong = cumulative + segLen * t;
+      bestPoint = [
+        coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
+        coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
+      ];
     }
     cumulative += segLen;
   }
 
-  return { distanceToPathM: best, alongPathM: bestAlong };
+  return { distanceToPathM: best, alongPathM: bestAlong, nearestPoint: bestPoint };
 }
+
+/** Distance from the route past which a runner is considered off it. */
+export const OFF_ROUTE_M = 50;
 
 /** "5:42" from seconds-per-km; em dash when pace is meaningless. */
 export function formatPace(secondsPerKm: number | null): string {
