@@ -50,6 +50,31 @@ class PlanRequest(BaseModel):
         return self
 
 
+class CustomRouteRequest(BaseModel):
+    """Body of POST /v1/routes/custom — grade a user-drawn route.
+
+    `coordinates` is the raw [lng, lat] trace the user drew; the server snaps it
+    to the road network before scoring, so a rough finger drag is fine.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    coordinates: list[list[float]] = Field(min_length=2, max_length=5000)
+    preference: Preference = "quiet"
+    name: str | None = Field(default=None, max_length=120)
+
+    @field_validator("coordinates")
+    @classmethod
+    def _validate_positions(cls, v: list[list[float]]) -> list[list[float]]:
+        for position in v:
+            if len(position) != 2:
+                raise ValueError("each position must be [longitude, latitude]")
+            lng, lat = position
+            if not (-180.0 <= lng <= 180.0 and -90.0 <= lat <= 90.0):
+                raise ValueError("coordinates out of range")
+        return v
+
+
 class StartPoint(BaseModel):
     latitude: float
     longitude: float

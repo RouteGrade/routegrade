@@ -74,6 +74,45 @@ class RoutePlanner:
             routes=candidates,
         )
 
+    def grade_drawn(
+        self, *, coordinates: list[list[float]], preference: str, name: str
+    ) -> PlannedRoute:
+        """Snap a user-drawn trace to streets and score it like a planned route.
+
+        Reuses the exact snap -> elevation -> score pipeline `_build_candidate`
+        runs, so a hand-drawn route earns a comparable RouteGrade. There is no
+        requested distance to compare against, so `within_tolerance` is trivially
+        true.
+        """
+
+        generated = self._routing.snap_trace(coordinates)
+
+        profile = self._elevation.elevations(sample_coordinates(generated.coordinates))
+        gain = scoring.elevation_gain_m(profile)
+
+        result = scoring.score_route(
+            distance_km=generated.distance_km,
+            elevation_gain_m=gain,
+            intersections_per_km=generated.intersections_per_km,
+            preference=preference,
+        )
+
+        return PlannedRoute(
+            id=uuid.uuid4(),
+            name=name,
+            geometry=LineStringGeometry(type="LineString", coordinates=generated.coordinates),
+            distance_km=round(generated.distance_km, 2),
+            elevation_gain_m=gain,
+            intersections_per_km=round(generated.intersections_per_km, 2),
+            sidewalk_coverage=generated.sidewalk_coverage,
+            score=result.score,
+            grade=result.grade,  # type: ignore[arg-type]
+            elevation_subscore=result.elevation_subscore,
+            intersection_subscore=result.intersection_subscore,
+            within_tolerance=True,
+            provider=generated.provider,
+        )
+
     def _resolve_start(self, request: PlanRequest) -> GeocodeResult:
         if request.latitude is not None and request.longitude is not None:
             label = (request.address or "").strip() or (
