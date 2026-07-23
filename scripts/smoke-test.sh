@@ -69,11 +69,15 @@ else
 fi
 
 # ---- 2. Web root returns 200 with expected HTML markers ----
+# Send the rg_guest cookie so the sign-in entry gate (proxy.ts) lets us through
+# to the planner instead of 307-ing a cookieless visitor to /login — this check
+# is about the root page's HTML, and the gate itself is exercised separately in
+# the "sign-in entry gate" section below.
 echo "${C_BOLD}[web]${C_OFF} public route explorer"
 ROOT_BODY="$TMP/root.html"
-ROOT_CODE=$(curl -sS -o "$ROOT_BODY" -w "%{http_code}" --max-time 20 "$WEB_ORIGIN/" || echo "000")
+ROOT_CODE=$(curl -sS -o "$ROOT_BODY" -w "%{http_code}" --max-time 20 -b "rg_guest=1" "$WEB_ORIGIN/" || echo "000")
 if [[ "$ROOT_CODE" != "200" ]]; then
-  fail "GET / returns 200" "got HTTP $ROOT_CODE" "Web app is down — check Vercel dashboard for routegrade-web"
+  fail "GET / returns 200" "got HTTP $ROOT_CODE" "Web app is down (or the rg_guest gate bypass broke) — check Vercel dashboard for routegrade-web"
 else
   if grep -q "RouteGrade — Run routes, graded" "$ROOT_BODY"; then
     pass "GET / has expected page title"
@@ -82,7 +86,56 @@ else
   fi
 fi
 
-# ---- 3. Web /login has references to BOTH sign-in methods AND no localhost leak ----
+# ---- 3. Sign-in entry gate (proxy.ts) behaves correctly ----
+# PR #10 added a first-touch gate: a cookieless, unauthenticated visitor to "/"
+# is 307-redirected to /login; anyone with the rg_guest cookie (or a real
+# session) is let straight through. The gate is a no-op unless Supabase env is
+# configured, so in production these all exercise the live gate.
+echo "${C_BOLD}[web]${C_OFF} sign-in entry gate"
+
+# 3a. Cookieless GET / redirects (307) to /login. Do NOT follow the redirect
+# (no -L) — we assert on the status + Location header directly.
+GATE_HEADERS="$TMP/gate.headers"
+GATE_CODE=$(curl -sS -o /dev/null -D "$GATE_HEADERS" -w "%{http_code}" --max-time 20 "$WEB_ORIGIN/" || echo "000")
+GATE_LOCATION=$(grep -i "^location:" "$GATE_HEADERS" | tr -d '\r' | awk -F': ' '{print $2}' | head -1)
+if [[ "$GATE_CODE" =~ ^(302|307)$ && "$GATE_LOCATION" == */login* ]]; then
+  pass "GET / (no rg_guest cookie) redirects to /login ($GATE_CODE)"
+else
+  fail "GET / (no rg_guest cookie) redirects to /login" \
+       "got HTTP $GATE_CODE, Location: ${GATE_LOCATION:-<none>}" \
+       "entry gate not firing: proxy.ts should 307 a cookieless, unauthenticated visitor from / to /login — confirm NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are set in Vercel (the gate no-ops when Supabase is unconfigured)"
+fi
+
+# 3b. GET / WITH the rg_guest cookie is let straight through (200) — proves the
+# gate is actually bypassable by the cookie, not just that it redirects.
+GATE_BYPASS_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 -b "rg_guest=1" "$WEB_ORIGIN/" || echo "000")
+if [[ "$GATE_BYPASS_CODE" == "200" ]]; then
+  pass "GET / with rg_guest cookie returns 200 (gate bypassable)"
+else
+  fail "GET / with rg_guest cookie returns 200" \
+       "got HTTP $GATE_BYPASS_CODE" \
+       "the rg_guest cookie should let a returning guest skip the gate and load the planner — check the cookie name/logic in apps/web/src/proxy.ts"
+fi
+
+# 3c. POST /auth/guest sets the rg_guest cookie and 303-redirects onward. Send a
+# real urlencoded form body so the route's request.formData() has something to
+# parse. Don't follow the redirect — assert on status + Set-Cookie directly.
+GUEST_HEADERS="$TMP/guest.headers"
+GUEST_CODE=$(curl -sS -o /dev/null -D "$GUEST_HEADERS" -w "%{http_code}" --max-time 20 \
+  -X POST "$WEB_ORIGIN/auth/guest" --data "next=/" || echo "000")
+if [[ "$GUEST_CODE" != "303" ]]; then
+  fail "POST /auth/guest returns 303" \
+       "got HTTP $GUEST_CODE" \
+       "\"Continue as guest\" is broken: POST /auth/guest should 303-redirect — check apps/web/src/app/auth/guest/route.ts"
+elif grep -qi "^set-cookie:.*rg_guest" "$GUEST_HEADERS"; then
+  pass "POST /auth/guest returns 303 and sets the rg_guest cookie"
+else
+  fail "POST /auth/guest sets an rg_guest cookie" \
+       "303 returned but no 'Set-Cookie: rg_guest' header found" \
+       "guest route redirected but never set the cookie — the gate would show again on the next visit; check response.cookies.set(\"rg_guest\", ...) in apps/web/src/app/auth/guest/route.ts"
+fi
+
+# ---- 4. Web /login has references to BOTH sign-in methods AND no localhost leak ----
 echo "${C_BOLD}[web]${C_OFF} login page (guards the auth-callback-URL bug)"
 LOGIN_BODY="$TMP/login.html"
 LOGIN_CODE=$(curl -sS -o "$LOGIN_BODY" -w "%{http_code}" --max-time 20 "$WEB_ORIGIN/login" || echo "000")
@@ -111,7 +164,7 @@ else
   fi
 fi
 
-# ---- 4. Web /auth/callback returns something sane (not 500) ----
+# ---- 5. Web /auth/callback returns something sane (not 500) ----
 echo "${C_BOLD}[web]${C_OFF} auth callback"
 CB_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$WEB_ORIGIN/auth/callback" || echo "000")
 # Expected: 302/307 (redirect to /login?error=callback with no code) OR 200.
@@ -122,7 +175,7 @@ else
   fail "GET /auth/callback returns sane status" "got HTTP $CB_CODE (expected 2xx or 3xx)" "callback route is throwing — check Vercel function logs for /auth/callback"
 fi
 
-# ---- 5. POST /v1/routes/plan with valid Toronto payload returns 200 with expected shape ----
+# ---- 6. POST /v1/routes/plan with valid Toronto payload returns 200 with expected shape ----
 echo "${C_BOLD}[api]${C_OFF} route planning"
 PLAN_BODY="$TMP/plan.json"
 PLAN_HEADERS="$TMP/plan.headers"
@@ -150,7 +203,7 @@ else
   fi
 fi
 
-# ---- 6. POST /v1/routes/plan with an invalid payload returns 400/422 (not 500) ----
+# ---- 7. POST /v1/routes/plan with an invalid payload returns 400/422 (not 500) ----
 INVALID_REQ='{"distance_km":5}'  # no address, no coords
 INVALID_BODY="$TMP/invalid.json"
 INVALID_CODE=$(curl -sS -o "$INVALID_BODY" -w "%{http_code}" --max-time 15 \
@@ -165,7 +218,7 @@ else
        "planner is 500-ing on bad input — validator not shipped, check pydantic schema on deployed API"
 fi
 
-# ---- 7. Rate-limit behavior on /v1/routes/plan ----
+# ---- 8. Rate-limit behavior on /v1/routes/plan ----
 # The API code (plans.py + core/rate_limit.py) sets Retry-After ONLY on the 429
 # response — normal 200s have no rate-limit headers. Verify the limiter is
 # actually wired by bursting fast requests until we see a 429 with Retry-After.
@@ -199,7 +252,7 @@ else
        "rate limiter disabled or per-instance limit far too generous — check ROUTE_PLAN_RATE_LIMIT_PER_MINUTE in Vercel env"
 fi
 
-# ---- 8. CORS preflight OPTIONS on /v1/routes/plan ----
+# ---- 9. CORS preflight OPTIONS on /v1/routes/plan ----
 echo "${C_BOLD}[api]${C_OFF} CORS preflight"
 CORS_HEADERS="$TMP/cors.headers"
 CORS_CODE=$(curl -sS -o /dev/null -D "$CORS_HEADERS" -w "%{http_code}" --max-time 15 \
@@ -228,7 +281,7 @@ else
   fi
 fi
 
-# ---- 9. Auth-protected GETs return 401 without a token ----
+# ---- 10. Auth-protected GETs return 401 without a token ----
 echo "${C_BOLD}[api]${C_OFF} auth-protected endpoints reject anon"
 for path in "/v1/users/me" "/v1/users/me/routes" "/v1/users/me/runs"; do
   CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "$API_ORIGIN$path" || echo "000")
