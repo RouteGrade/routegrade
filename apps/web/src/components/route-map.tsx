@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LineString } from "geojson";
-import { OFF_ROUTE_M, projectOntoPath } from "@/lib/geo";
+import { OFF_ROUTE_M, projectOntoPath, sliceRouteAtDistance } from "@/lib/geo";
 
 const DOWNTOWN_TORONTO: [number, number] = [-79.3832, 43.6532];
 const MAP_STYLE_URL =
@@ -12,6 +12,10 @@ const MAP_STYLE_URL =
   "https://demotiles.maplibre.org/style.json";
 
 const ROUTE_SOURCE = "active-route";
+const ROUTE_DASHED_LAYER = "route-dashed";
+// The geometry effect below only ever *hides* ROUTE_DASHED_LAYER (when the
+// route disappears) — showing it is owned solely by the follow effect, so
+// the two never fight over the same layer's visibility.
 const ROUTE_LAYERS = ["route-glow", "route-line"] as const;
 const TRAVELED_SOURCE = "run-traveled";
 const TRAVELED_LAYER = "run-traveled-line";
@@ -80,8 +84,6 @@ function easeInOutSine(t: number): number {
 export type RunnerState = {
   /** Live GPS position, [lng, lat]. */
   position: Coord;
-  /** Trace of accepted fixes so far — drawn as the "covered" line. */
-  traveled: Coord[];
 };
 
 export type RouteMapProps = {
@@ -186,6 +188,26 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
           ],
         },
       });
+      // Flat color, not the gradient `route-line` uses — MapLibre disables
+      // line-gradient on any layer with a line-dasharray set, so the
+      // persistent-dashed run style needs its own layer rather than
+      // dashing route-line directly.
+      map.addLayer({
+        id: ROUTE_DASHED_LAYER,
+        type: "line",
+        source: ROUTE_SOURCE,
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+          visibility: "none",
+        },
+        paint: {
+          "line-color": "#34d399",
+          "line-width": 4.5,
+          "line-opacity": 0.55,
+          "line-dasharray": [1.6, 1.6],
+        },
+      });
       map.addSource(TRAVELED_SOURCE, {
         type: "geojson",
         data: lineStringData([]),
@@ -254,6 +276,10 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
         if (map.getLayer(id)) {
           map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
         }
+      }
+      // Only ever hidden here, never shown — see the ROUTE_LAYERS comment.
+      if (!visible && map.getLayer(ROUTE_DASHED_LAYER)) {
+        map.setLayoutProperty(ROUTE_DASHED_LAYER, "visibility", "none");
       }
 
       markerRef.current?.remove();
@@ -367,7 +393,59 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
     };
   }, [geometry]);
 
-  // Live run telemetry: runner dot, traveled trace, camera follow.
+  // Once a run starts, the route stops "drawing itself in" and becomes a
+  // static dashed line instead (the dedicated ROUTE_DASHED_LAYER, swapped in
+  // for route-line/route-glow) — progress is shown by the highlight overlay
+  // below, not by replaying the intro animation. Both this effect and the
+  // geometry effect above depend on `geometry`, and this one is declared
+  // later, so whenever geometry changes React runs this one second in the
+  // same commit and it gets the final say on layer visibility.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const applyFollowStyle = () => {
+      if (!map.getLayer("route-line") || !map.getLayer(ROUTE_DASHED_LAYER)) return;
+      const coordinates = (geometry?.coordinates ?? []) as Coord[];
+      if (coordinates.length < 2) return;
+
+      if (follow) {
+        if (animationFrameRef.current !== null) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        if (drawTimerRef.current !== null) {
+          clearTimeout(drawTimerRef.current);
+          drawTimerRef.current = null;
+        }
+        tipMarkerRef.current?.remove();
+        tipMarkerRef.current = null;
+
+        const source = map.getSource(ROUTE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        source?.setData(lineStringData(coordinates));
+
+        map.setLayoutProperty("route-line", "visibility", "none");
+        map.setLayoutProperty("route-glow", "visibility", "none");
+        map.setLayoutProperty(ROUTE_DASHED_LAYER, "visibility", "visible");
+      } else {
+        map.setLayoutProperty("route-line", "visibility", "visible");
+        map.setLayoutProperty("route-glow", "visibility", "visible");
+        map.setLayoutProperty(ROUTE_DASHED_LAYER, "visibility", "none");
+      }
+    };
+
+    if (styleReadyRef.current) {
+      applyFollowStyle();
+    } else {
+      map.once("routegrade:ready", applyFollowStyle);
+    }
+
+    return () => {
+      map.off("routegrade:ready", applyFollowStyle);
+    };
+  }, [follow, geometry]);
+
+  // Live run telemetry: runner dot, route-progress highlight, camera follow.
   useEffect(() => {
     followRef.current = follow;
     const map = mapRef.current;
@@ -396,17 +474,21 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
       runnerMarkerRef.current.setLngLat(runner.position);
     }
 
-    if (runner.traveled.length >= 2) {
-      traveledSource?.setData(lineStringData(runner.traveled));
+    const routeCoordinates = (geometry?.coordinates ?? []) as Coord[];
+    const nearest =
+      routeCoordinates.length >= 2
+        ? projectOntoPath(runner.position, routeCoordinates)
+        : null;
+
+    // Highlight the portion of the *route* covered so far (not the raw,
+    // jittery GPS trace) — grows from the start as the runner advances.
+    if (nearest) {
+      traveledSource?.setData(
+        lineStringData(sliceRouteAtDistance(routeCoordinates, nearest.alongPathM)),
+      );
     }
 
     if (follow && !followSuspended) {
-      const routeCoordinates = (geometry?.coordinates ?? []) as Coord[];
-      const nearest =
-        routeCoordinates.length >= 2
-          ? projectOntoPath(runner.position, routeCoordinates)
-          : null;
-
       if (nearest && nearest.distanceToPathM > OFF_ROUTE_M) {
         // Off-route: widen the camera to show both the runner and the
         // nearest point on the route, instead of tight-zooming on the GPS

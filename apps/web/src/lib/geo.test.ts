@@ -6,6 +6,7 @@ import {
   OFF_ROUTE_M,
   pathLengthMeters,
   projectOntoPath,
+  sliceRouteAtDistance,
   spokenPace,
   type LngLat,
 } from "./geo";
@@ -92,6 +93,49 @@ describe("projectOntoPath", () => {
     const onRoute: LngLat = [midLng, 43.6501]; // ~11 m off — under threshold
     expect(projectOntoPath(nearby, route).distanceToPathM).toBeGreaterThan(OFF_ROUTE_M);
     expect(projectOntoPath(onRoute, route).distanceToPathM).toBeLessThan(OFF_ROUTE_M);
+  });
+});
+
+describe("sliceRouteAtDistance", () => {
+  const route: LngLat[] = [
+    [-79.40, 43.65],
+    [-79.35, 43.65],
+    [-79.30, 43.65],
+  ];
+
+  it("is empty for an empty route", () => {
+    expect(sliceRouteAtDistance([], 100)).toEqual([]);
+  });
+
+  it("stays pinned to the start point at zero distance", () => {
+    const slice = sliceRouteAtDistance(route, 0);
+    for (const point of slice) expect(point).toEqual(route[0]);
+  });
+
+  it("returns the full route once target passes the total length", () => {
+    // pathLengthMeters is haversine-based; sliceRouteAtDistance uses the
+    // same local equirectangular frame as projectOntoPath, so the two totals
+    // are only approximately equal — overshoot well past either to avoid a
+    // flaky boundary comparison.
+    const total = pathLengthMeters(route);
+    expect(sliceRouteAtDistance(route, total + 10_000)).toEqual(route);
+  });
+
+  it("interpolates a cut point partway along a segment, matching projectOntoPath's alongPathM for the same point", () => {
+    const midLng = (route[0][0] + route[1][0]) / 2;
+    const target: LngLat = [midLng, 43.65];
+    const { alongPathM } = projectOntoPath(target, route);
+
+    const slice = sliceRouteAtDistance(route, alongPathM);
+
+    expect(slice[0]).toEqual(route[0]);
+    expect(slice[slice.length - 1][0]).toBeCloseTo(midLng, 4);
+    expect(slice[slice.length - 1][1]).toBeCloseTo(43.65, 4);
+    // Growing the target distance should only ever grow the slice (matches
+    // a runner's progress along the route monotonically advancing).
+    expect(sliceRouteAtDistance(route, alongPathM + 5).length).toBeGreaterThanOrEqual(
+      slice.length,
+    );
   });
 });
 

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LineString } from "geojson";
 import {
   ApiError,
@@ -207,9 +207,15 @@ export default function RouteExplorer({
       }
     : reopened;
 
-  const activeGeometry: LineString | null = active
-    ? { type: "LineString", coordinates: active.route.geometry.coordinates }
-    : null;
+  // Stable identity across re-renders (e.g. telemetry ticks during a run) —
+  // RouteMap treats a new `geometry` reference as "the route changed" and
+  // re-plays its intro draw animation, so a fresh object here on every
+  // render made the route line appear to animate continuously mid-run.
+  const activeCoordinates = active?.route.geometry.coordinates ?? null;
+  const activeGeometry: LineString | null = useMemo(
+    () => (activeCoordinates ? { type: "LineString", coordinates: activeCoordinates } : null),
+    [activeCoordinates],
+  );
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {

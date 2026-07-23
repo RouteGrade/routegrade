@@ -37,7 +37,6 @@ export type RunnableRoute = {
 
 export type RunTelemetry = {
   position: LngLat;
-  traveled: LngLat[];
 };
 
 type Phase = "countdown" | "running" | "paused" | "finished";
@@ -173,7 +172,7 @@ export default function RunTracker({
     lastFixRef.current = { coord, timeMs: nowMs };
 
     // Always show where the runner is, even fixes we won't count.
-    onTelemetry({ position: coord, traveled: [...traveledRef.current] });
+    onTelemetry({ position: coord });
 
     if (phaseRef.current !== "running") return;
     if (accuracyM > MAX_ACCURACY_M) return;
@@ -198,7 +197,7 @@ export default function RunTracker({
     }
 
     setDistanceM(distanceRef.current);
-    onTelemetry({ position: coord, traveled: [...traveledRef.current] });
+    onTelemetry({ position: coord });
 
     // Current pace over the rolling window.
     const windowStart = samplesRef.current.find(
