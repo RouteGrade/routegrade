@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
  * Small session-aware nav pill rendered on the public home page.
- * Signed out: shows "Log in". Signed in: shows "Account".
+ * Signed out: shows "Sign in". Signed in: shows "Account".
  *
  * Uses getUser() so it reflects Supabase's authoritative session state, not the
  * potentially stale local session object.
@@ -25,7 +25,7 @@ export async function SessionNav() {
         href="/login"
         className="inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
       >
-        Log in
+        Sign in
       </Link>
     );
   }
