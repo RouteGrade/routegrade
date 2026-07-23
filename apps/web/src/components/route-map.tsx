@@ -34,6 +34,9 @@ const ROUTE_ARROWS_SOURCE = "route-direction-source";
 const ROUTE_LAYERS = ["route-glow", "route-line", ROUTE_ARROWS_LAYER] as const;
 const TRAVELED_SOURCE = "run-traveled";
 const TRAVELED_LAYER = "run-traveled-line";
+// The in-progress freehand line the user draws in "create your own route" mode.
+const DRAW_SOURCE = "draw-route";
+const DRAW_LAYER = "draw-route-line";
 // Camera-follow zoom while running; gentle enough to keep context visible.
 const FOLLOW_ZOOM = 15.5;
 
@@ -139,9 +142,19 @@ export type RouteMapProps = {
   runner?: RunnerState | null;
   /** Ease the camera after the runner while true (until the user pans away). */
   follow?: boolean;
+  /** When true, the map enters freehand draw mode (pan disabled). */
+  drawing?: boolean;
+  /** Fires with the drawn [lng, lat] path when a freehand stroke finishes. */
+  onDrawComplete?: (coordinates: Coord[]) => void;
 };
 
-export default function RouteMap({ geometry, runner = null, follow = false }: RouteMapProps) {
+export default function RouteMap({
+  geometry,
+  runner = null,
+  follow = false,
+  drawing = false,
+  onDrawComplete,
+}: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -152,6 +165,11 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
   const [followSuspended, setFollowSuspended] = useState(false);
   const [prevFollow, setPrevFollow] = useState(follow);
   const styleReadyRef = useRef(false);
+  // Latest onDrawComplete, read from the draw handlers without re-binding them.
+  const onDrawCompleteRef = useRef(onDrawComplete);
+  useEffect(() => {
+    onDrawCompleteRef.current = onDrawComplete;
+  }, [onDrawComplete]);
 
   // Render-phase adjustment: a fresh run always starts with follow engaged.
   if (follow !== prevFollow) {
@@ -269,6 +287,23 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
           "line-opacity": 0.9,
         },
       });
+      // Freehand draw-mode line — bright and on top so the stroke reads
+      // clearly against any basemap while the user is drawing.
+      map.addSource(DRAW_SOURCE, {
+        type: "geojson",
+        data: lineStringData([]),
+      });
+      map.addLayer({
+        id: DRAW_LAYER,
+        type: "line",
+        source: DRAW_SOURCE,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#f472b6",
+          "line-width": 5,
+          "line-opacity": 0.95,
+        },
+      });
       // Direction arrows along the route — a plain line can't show which way
       // to go where a loop closes on itself or an out-and-back doubles back
       // over the same road, so this is on top of everything else drawn.
@@ -317,6 +352,90 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
       styleReadyRef.current = false;
     };
   }, []);
+
+  // Freehand draw mode: while `drawing`, a pointer drag paints a line instead
+  // of panning the map. Attaches only when active so normal map gestures are
+  // untouched otherwise.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !drawing) return;
+
+    const canvas = map.getCanvas();
+    const setDrawData = (coords: Coord[]) => {
+      // Read the live map and tolerate a torn-down style (getSource throws once
+      // the map is removed) — the draw source only exists after style load.
+      const m = mapRef.current;
+      if (!m) return;
+      try {
+        const src = m.getSource(DRAW_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        src?.setData(lineStringData(coords));
+      } catch {
+        // map mid-teardown; nothing to draw.
+      }
+    };
+
+    let points: Coord[] = [];
+    let active = false;
+
+    const toCoord = (e: PointerEvent): Coord => {
+      const rect = canvas.getBoundingClientRect();
+      const lngLat = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+      return [lngLat.lng, lngLat.lat];
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      active = true;
+      points = [toCoord(e)];
+      setDrawData(points);
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // setPointerCapture can throw on stale pointer ids; harmless.
+      }
+      e.preventDefault();
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!active) return;
+      points.push(toCoord(e));
+      setDrawData(points);
+    };
+    const onUp = () => {
+      if (!active) return;
+      active = false;
+      if (points.length >= 2) onDrawCompleteRef.current?.(points);
+    };
+
+    map.dragPan.disable();
+    map.touchZoomRotate.disable();
+    map.doubleClickZoom.disable();
+    canvas.style.cursor = "crosshair";
+    canvas.style.touchAction = "none";
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointercancel", onUp);
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+      canvas.style.cursor = "";
+      canvas.style.touchAction = "";
+      setDrawData([]);
+      // Re-enable gestures only if the map is still alive (not mid-teardown).
+      if (mapRef.current) {
+        try {
+          map.dragPan.enable();
+          map.touchZoomRotate.enable();
+          map.doubleClickZoom.enable();
+        } catch {
+          // map already removed; gestures went with it.
+        }
+      }
+    };
+  }, [drawing]);
 
   useEffect(() => {
     const map = mapRef.current;

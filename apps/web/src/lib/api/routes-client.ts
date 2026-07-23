@@ -84,6 +84,38 @@ export async function planRoute(body: PlanRequest): Promise<PlanResponse> {
   return (await res.json()) as PlanResponse;
 }
 
+export type CustomRouteRequest = {
+  coordinates: [number, number][];
+  preference: Preference;
+  name?: string;
+};
+
+/**
+ * Grade a user-drawn route. Public like planRoute — the server snaps the raw
+ * trace to the road network and scores it, returning one PlannedRoute.
+ */
+export async function gradeCustomRoute(
+  body: CustomRouteRequest,
+): Promise<PlannedRoute> {
+  const res = await fetch(`${API_BASE}/v1/routes/custom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const payload = await res.json();
+      if (payload?.detail?.message) detail = payload.detail.message;
+      else if (typeof payload?.detail === "string") detail = payload.detail;
+    } catch {
+      // ignore body parse
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as PlannedRoute;
+}
+
 export async function listSavedRoutes(): Promise<SavedRoute[]> {
   const { routes } = await request<{ routes: SavedRoute[] }>("/v1/users/me/routes");
   return routes;
