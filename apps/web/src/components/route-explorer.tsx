@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/authenticated-client";
 import {
   getSavedRoute,
+  gradeCustomRoute,
   planRoute,
   saveRoute,
   type PlanResponse,
@@ -165,6 +166,13 @@ export default function RouteExplorer({
   // Mobile-only: the planner form collapses into a bottom-sheet header so the
   // map stays visible. Ignored on sm+ where the form is always shown.
   const [formOpen, setFormOpen] = useState(true);
+  // "Create your own route": freehand draw on the map, then grade the drawn
+  // path through /custom and hand the result to the normal result card.
+  const [drawing, setDrawing] = useState(false);
+  const [drawnCoords, setDrawnCoords] = useState<[number, number][] | null>(null);
+  const [customName, setCustomName] = useState("");
+  const [grading, setGrading] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
   // Live run mode: the planner UI hides and RunTracker takes over the screen.
   const [runMode, setRunMode] = useState(false);
   const [runTelemetry, setRunTelemetry] = useState<RunTelemetry | null>(null);
@@ -276,6 +284,66 @@ export default function RouteExplorer({
     () => (activeCoordinates ? { type: "LineString", coordinates: activeCoordinates } : null),
     [activeCoordinates],
   );
+
+  // The just-drawn (not yet graded) freehand path, shown on the map until it
+  // becomes a graded route (which then flows through `active`/`plan`).
+  const drawnGeometry: LineString | null = useMemo(
+    () =>
+      drawnCoords && drawnCoords.length >= 2
+        ? { type: "LineString", coordinates: drawnCoords }
+        : null,
+    [drawnCoords],
+  );
+  const mapGeometry = plan ? activeGeometry : (drawnGeometry ?? activeGeometry);
+
+  const startDrawing = () => {
+    setPlan(null);
+    setReopened(null);
+    setPlanError(null);
+    setDrawnCoords(null);
+    setDrawError(null);
+    setCustomName("");
+    setDrawing(true);
+    if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
+  };
+
+  const cancelDrawing = () => {
+    setDrawing(false);
+    setDrawnCoords(null);
+    setDrawError(null);
+  };
+
+  const gradeDrawnRoute = async () => {
+    if (!drawnCoords || drawnCoords.length < 2) return;
+    setGrading(true);
+    setDrawError(null);
+    try {
+      const route = await gradeCustomRoute({
+        coordinates: drawnCoords,
+        preference,
+        name: customName.trim() || undefined,
+      });
+      const [lng, lat] = route.geometry.coordinates[0];
+      setPlan({
+        start: { latitude: lat, longitude: lng, label: route.name },
+        requested_distance_km: route.distance_km,
+        preference,
+        distance_tolerance: 0,
+        routes: [route],
+      });
+      setActiveIndex(0);
+      setDrawnCoords(null);
+      setDrawing(false);
+    } catch (err) {
+      setDrawError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't grade that route. Please try again.",
+      );
+    } finally {
+      setGrading(false);
+    }
+  };
 
   const handleUseMyLocation = () => {
     if (!("geolocation" in navigator)) {
@@ -389,7 +457,85 @@ export default function RouteExplorer({
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-zinc-950">
-      <RouteMap geometry={activeGeometry} runner={runTelemetry} follow={runMode} />
+      <RouteMap
+        geometry={mapGeometry}
+        runner={runTelemetry}
+        follow={runMode}
+        drawing={drawing}
+        onDrawComplete={(coords) => {
+          setDrawnCoords(coords);
+          setDrawing(false);
+        }}
+      />
+
+      {/* Draw-mode overlay: instructions while drawing, then name + grade. */}
+      {!runMode && (drawing || drawnCoords) && !plan && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+          <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
+            {drawing ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-zinc-200">
+                  <span className="mr-1.5 text-pink-400">✎</span>
+                  Press and drag on the map to draw your route.
+                </p>
+                <button
+                  type="button"
+                  onClick={cancelDrawing}
+                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-semibold text-white">Name your route</p>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="My route"
+                  maxLength={120}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-400/50 focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrawnCoords(null);
+                      setDrawError(null);
+                      setDrawing(true);
+                    }}
+                    disabled={grading}
+                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-60"
+                  >
+                    Redraw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={gradeDrawnRoute}
+                    disabled={grading}
+                    className="h-10 flex-[1.5] rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {grading ? "Grading…" : "Grade this route"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={cancelDrawing}
+                  className="text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
+                >
+                  Cancel
+                </button>
+                {drawError && (
+                  <p role="alert" className="text-center text-xs text-rose-400">
+                    {drawError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Vignettes for legibility — top on desktop, bottom behind the mobile sheet */}
       <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-zinc-950/80 to-transparent sm:block" />
@@ -559,6 +705,27 @@ export default function RouteExplorer({
                 {planError}
               </p>
             )}
+
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/10" />
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                or
+              </span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
+            <button
+              type="button"
+              onClick={startDrawing}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                <path d="M2 2l7.586 7.586" />
+                <circle cx="11" cy="11" r="2" />
+              </svg>
+              Draw your own route
+            </button>
           </form>
         </section>
 
