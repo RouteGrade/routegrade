@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LineString } from "geojson";
+import { OFF_ROUTE_M, projectOntoPath } from "@/lib/geo";
 
 const DOWNTOWN_TORONTO: [number, number] = [-79.3832, 43.6532];
 const MAP_STYLE_URL =
@@ -400,14 +401,36 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
     }
 
     if (follow && !followSuspended) {
-      map.easeTo({
-        center: runner.position,
-        zoom: Math.max(map.getZoom(), FOLLOW_ZOOM),
-        duration: 950,
-        essential: true,
-      });
+      const routeCoordinates = (geometry?.coordinates ?? []) as Coord[];
+      const nearest =
+        routeCoordinates.length >= 2
+          ? projectOntoPath(runner.position, routeCoordinates)
+          : null;
+
+      if (nearest && nearest.distanceToPathM > OFF_ROUTE_M) {
+        // Off-route: widen the camera to show both the runner and the
+        // nearest point on the route, instead of tight-zooming on the GPS
+        // fix alone and stranding the route line off-screen.
+        const bounds = new maplibregl.LngLatBounds(
+          runner.position,
+          runner.position,
+        ).extend(nearest.nearestPoint);
+        map.fitBounds(bounds, {
+          padding: 96,
+          maxZoom: FOLLOW_ZOOM,
+          duration: 950,
+          essential: true,
+        });
+      } else {
+        map.easeTo({
+          center: runner.position,
+          zoom: Math.max(map.getZoom(), FOLLOW_ZOOM),
+          duration: 950,
+          essential: true,
+        });
+      }
     }
-  }, [runner, follow, followSuspended]);
+  }, [runner, follow, followSuspended, geometry]);
 
   const handleRecenter = () => {
     setFollowSuspended(false);

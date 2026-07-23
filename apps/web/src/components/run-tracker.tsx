@@ -10,6 +10,7 @@ import {
   formatDuration,
   formatPace,
   haversineMeters,
+  OFF_ROUTE_M,
   pathLengthMeters,
   projectOntoPath,
   spokenPace,
@@ -47,8 +48,8 @@ const MAX_ACCURACY_M = 60;
 const MIN_STEP_M = 2.5;
 const MAX_SPEED_MPS = 10;
 
-// Off-route hysteresis: alert past 50 m, recover under 30 m.
-const OFF_ROUTE_M = 50;
+// Off-route hysteresis: alert past 50 m (OFF_ROUTE_M, shared with the map's
+// camera-follow logic), recover under 30 m.
 const BACK_ON_ROUTE_M = 30;
 
 // Rolling window for "current pace".
