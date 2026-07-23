@@ -24,6 +24,8 @@ from app.schemas.routes import (
     PlannedRoute,
     PlanRequest,
     PlanResponse,
+    SnapRouteRequest,
+    SnapRouteResponse,
 )
 from app.services.route_planner import RoutePlanner
 
@@ -175,5 +177,31 @@ def grade_custom_route(
             detail={
                 "code": "provider_error",
                 "message": "We couldn't snap that route to the map. Try drawing it again.",
+            },
+        ) from None
+
+
+@router.post(
+    "/snap",
+    response_model=SnapRouteResponse,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def snap_route(
+    payload: SnapRouteRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> SnapRouteResponse:
+    """Snap a drawn trace onto roads (geometry only) for live assisted drawing.
+
+    Public, shares /plan's per-IP budget. Grading happens later via /custom.
+    """
+
+    try:
+        return planner.snap(payload.coordinates)
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "We couldn't snap that route to the map.",
             },
         ) from None

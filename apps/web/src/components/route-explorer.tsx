@@ -12,6 +12,7 @@ import {
   gradeCustomRoute,
   planRoute,
   saveRoute,
+  snapRoute,
   type PlanResponse,
   type PlannedRoute,
   type Preference,
@@ -462,6 +463,14 @@ export default function RouteExplorer({
         runner={runTelemetry}
         follow={runMode}
         drawing={drawing}
+        onSnap={async (coords) => {
+          try {
+            const { geometry } = await snapRoute(coords);
+            return geometry.coordinates;
+          } catch {
+            return null;
+          }
+        }}
         onDrawComplete={(coords) => {
           setDrawnCoords(coords);
           setDrawing(false);
@@ -476,7 +485,7 @@ export default function RouteExplorer({
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-zinc-200">
                   <span className="mr-1.5 text-pink-400">✎</span>
-                  Press and drag on the map to draw your route.
+                  Drag to draw — your route snaps to the roads as you go.
                 </p>
                 <button
                   type="button"

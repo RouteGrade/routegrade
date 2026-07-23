@@ -132,7 +132,11 @@ def test_custom_route_provider_error_maps_to_502(custom_client):
     assert res.json()["detail"]["code"] == "provider_error"
 
 
-# --- OSRMRoutingEngine.snap_trace unit tests (OSRM /match parsing) ---
+# --- OSRMRoutingEngine.snap_trace unit tests (OSRM /route parsing) ---
+#
+# snap_trace routes *through* the drawn points via /route rather than /match:
+# freehand traces reliably fail map-matching (NoMatch), but /route snaps each
+# waypoint to the nearest road and always returns an on-road path.
 
 
 class _FakeResponse:
@@ -146,10 +150,10 @@ class _FakeResponse:
         return self._payload
 
 
-def _match_payload() -> dict:
+def _route_payload() -> dict:
     return {
         "code": "Ok",
-        "matchings": [
+        "routes": [
             {
                 "distance": 1500.0,
                 "geometry": {
@@ -175,30 +179,30 @@ def _match_payload() -> dict:
     }
 
 
-def test_snap_trace_parses_match_response(monkeypatch):
+def test_snap_trace_routes_through_the_trace(monkeypatch):
     captured = {}
 
     def fake_get(url, params=None, timeout=None):
         captured["url"] = url
         captured["params"] = params
-        return _FakeResponse(_match_payload())
+        return _FakeResponse(_route_payload())
 
     monkeypatch.setattr(httpx, "get", fake_get)
     engine = OSRMRoutingEngine("http://osrm.test", profile="foot")
     result = engine.snap_trace(_TRACE)
 
-    assert "/match/v1/foot/" in captured["url"]
-    assert captured["params"]["tidy"] == "true"
-    assert result.provider == "osrm-match"
+    # Uses /route (not /match) so imprecise drawings still snap to roads.
+    assert "/route/v1/foot/" in captured["url"]
+    assert result.provider == "osrm-drawn"
     assert result.distance_km == pytest.approx(1.5)
     assert len(result.coordinates) == 3
     # 2 real maneuvers (depart/arrive excluded) over 1.5 km.
     assert result.intersections_per_km == pytest.approx(2 / 1.5)
 
 
-def test_snap_trace_raises_on_no_match(monkeypatch):
+def test_snap_trace_raises_when_route_fails(monkeypatch):
     monkeypatch.setattr(
-        httpx, "get", lambda *a, **k: _FakeResponse({"code": "NoMatch", "matchings": []})
+        httpx, "get", lambda *a, **k: _FakeResponse({"code": "NoRoute", "routes": []})
     )
     engine = OSRMRoutingEngine("http://osrm.test")
     with pytest.raises(ProviderError):
@@ -207,9 +211,44 @@ def test_snap_trace_raises_on_no_match(monkeypatch):
 
 def test_downsample_keeps_endpoints_and_caps():
     coords = [[float(i), 0.0] for i in range(500)]
-    thinned = _downsample(coords, 100)
-    assert len(thinned) <= 100
+    thinned = _downsample(coords, 25)
+    assert len(thinned) <= 25
     assert thinned[0] == coords[0]
     assert thinned[-1] == coords[-1]
     # Small inputs pass through untouched.
-    assert _downsample(_TRACE, 100) == _TRACE
+    assert _downsample(_TRACE, 25) == _TRACE
+
+
+# --- POST /v1/routes/snap (geometry-only, for live assisted drawing) ---
+
+
+def test_snap_endpoint_returns_on_road_geometry(custom_client):
+    routing = StubRouting(
+        GeneratedRoute(
+            coordinates=[[-79.3832, 43.6519], [-79.3845, 43.6516], [-79.3860, 43.6512]],
+            distance_km=1.5,
+            intersections_per_km=2.0,
+            provider="osrm-drawn",
+            sidewalk_coverage=None,
+        )
+    )
+    c = custom_client(_planner(routing=routing))
+    res = c.post("/v1/routes/snap", json={"coordinates": _TRACE})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["geometry"]["type"] == "LineString"
+    assert len(body["geometry"]["coordinates"]) == 3
+    assert body["distance_km"] == 1.5
+    assert routing.calls == [_TRACE]
+
+
+def test_snap_endpoint_requires_two_points(custom_client):
+    c = custom_client(_planner())
+    assert c.post("/v1/routes/snap", json={"coordinates": [[-79.38, 43.65]]}).status_code == 422
+
+
+def test_snap_endpoint_provider_error_maps_to_502(custom_client):
+    routing = StubRouting(ProviderError("routing", "no route"))
+    c = custom_client(_planner(routing=routing))
+    res = c.post("/v1/routes/snap", json={"coordinates": _TRACE})
+    assert res.status_code == 502
