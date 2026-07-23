@@ -42,17 +42,20 @@ non-zero on any failure, so it's CI-safe.
 | # | Check | What it catches |
 |---|---|---|
 | 1 | `GET /health` returns `200` with `status=ok` | API is down, wrong URL, or crash on cold start |
-| 2 | `GET /` returns `200` with the expected `<title>` | Web build shipped but layout metadata is broken |
-| 3a | `GET /login` returns `200` | The auth route did not ship / 404s on the login page |
-| 3b | `/login` HTML contains "Continue with Google" | Google sign-in button client component missing from bundle |
-| 3c | `/login` HTML contains the magic-link form (`#magic-email` or button copy) | Email magic-link form missing from bundle |
-| 3d | `/login` HTML contains **no** `localhost` URLs | **The bug that prompted this script**: `NEXT_PUBLIC_APP_URL` (or the Supabase URL) is unset in Vercel, so client-side auth links to `http://localhost` in production |
-| 4 | `GET /auth/callback` returns 2xx/3xx (not 5xx) | Callback route throws — logins would fail silently |
-| 5 | `POST /v1/routes/plan` with a valid Toronto payload returns `200` with `start` + `routes[]` | Planner is up, providers (Nominatim/OSRM/Open-Elevation) reachable, schema stable |
-| 6 | `POST /v1/routes/plan` with an invalid payload returns `400/422` | Pydantic validation is wired — no 500 on bad user input |
-| 7 | A burst of 25 posts to `/plan` eventually returns `429` with `Retry-After` | Per-IP rate limiter (`app/core/rate_limit.py`) is live — protects against provider-bill blowouts |
-| 8 | `OPTIONS /v1/routes/plan` returns proper `Access-Control-Allow-Origin` = web origin, and `Allow-Methods` includes `POST` | Browser CORS preflight — if this fails, the web app cannot call the API from a real browser |
-| 9 | `GET /v1/users/me`, `/v1/users/me/routes`, `/v1/users/me/runs` return `401/403` without a token | Auth-protected endpoints are actually protected — no anonymous data leak |
+| 2 | `GET /` (**with** an `rg_guest=1` cookie to bypass the sign-in entry gate) returns `200` with the expected `<title>` | Web build shipped but layout metadata is broken. The cookie is required post-PR #10 so this content check isn't swallowed by the gate's redirect (see check 3). |
+| 3a | `GET /` with **no** `rg_guest` cookie redirects (`307`) to `/login` | The sign-in entry gate (`proxy.ts`) is not firing — a cookieless first-touch visitor should land on `/login`. Usually means `NEXT_PUBLIC_SUPABASE_URL`/`_PUBLISHABLE_KEY` are unset in Vercel (the gate no-ops when Supabase is unconfigured). |
+| 3b | `GET /` **with** an `rg_guest=1` cookie returns `200` | The gate isn't bypassable by the cookie — a returning guest would be stuck on `/login` instead of reaching the planner. |
+| 3c | `POST /auth/guest` returns `303` with a `Set-Cookie: rg_guest` header | "Continue as guest" is broken — either it doesn't redirect or never sets the cookie, so the gate would reappear on every visit. |
+| 4a | `GET /login` returns `200` | The auth route did not ship / 404s on the login page |
+| 4b | `/login` HTML contains "Continue with Google" | Google sign-in button client component missing from bundle |
+| 4c | `/login` HTML contains the magic-link form (`#magic-email` or button copy) | Email magic-link form missing from bundle |
+| 4d | `/login` HTML contains **no** `localhost` URLs | **The bug that prompted this script**: `NEXT_PUBLIC_APP_URL` (or the Supabase URL) is unset in Vercel, so client-side auth links to `http://localhost` in production |
+| 5 | `GET /auth/callback` returns 2xx/3xx (not 5xx) | Callback route throws — logins would fail silently |
+| 6 | `POST /v1/routes/plan` with a valid Toronto payload returns `200` with `start` + `routes[]` | Planner is up, providers (Nominatim/OSRM/Open-Elevation) reachable, schema stable |
+| 7 | `POST /v1/routes/plan` with an invalid payload returns `400/422` | Pydantic validation is wired — no 500 on bad user input |
+| 8 | A burst of 25 posts to `/plan` eventually returns `429` with `Retry-After` | Per-IP rate limiter (`app/core/rate_limit.py`) is live — protects against provider-bill blowouts |
+| 9 | `OPTIONS /v1/routes/plan` returns proper `Access-Control-Allow-Origin` = web origin, and `Allow-Methods` includes `POST` | Browser CORS preflight — if this fails, the web app cannot call the API from a real browser |
+| 10 | `GET /v1/users/me`, `/v1/users/me/routes`, `/v1/users/me/runs` return `401/403` without a token | Auth-protected endpoints are actually protected — no anonymous data leak |
 
 Every failing check prints a `FIX HINT` pointing at the most likely cause.
 
