@@ -45,7 +45,41 @@ export async function proxy(request: NextRequest) {
 
   // Force a token check early so any pending refresh writes cookies here (and
   // not after the response has been sent, which would silently lose them).
-  await supabase.auth.getClaims();
+  const { data, error } = await supabase.auth.getClaims();
+  const authenticated = data?.claims != null;
+
+  // First-touch gate: an unauthenticated visitor who has never chosen guest
+  // mode lands on /login instead of the planner. Anyone who has signed in
+  // before, or already clicked "Continue as guest" (rg_guest cookie), skips
+  // straight through — this only fires once per browser. Fail open on a
+  // getClaims error (distinct from "no session" — see the return type):
+  // login/page.tsx checks auth via getUser() instead, and a transient
+  // getClaims failure while getUser still succeeds would otherwise bounce a
+  // genuinely signed-in visitor in an endless "/" -> /login -> "/" loop.
+  if (
+    request.nextUrl.pathname === "/" &&
+    !authenticated &&
+    !error &&
+    !request.cookies.has("rg_guest")
+  ) {
+    const loginUrl = new URL("/login", request.url);
+    const next = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+    if (next !== "/") loginUrl.searchParams.set("next", next);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    // Carry over any session-refresh cookies staged on `response` above —
+    // dropping them here would silently lose a concurrent token refresh —
+    // plus the cache-control headers @supabase/ssr requires alongside any
+    // auth cookie, so a CDN/reverse proxy never caches (and replays to a
+    // different visitor) a response carrying someone's session cookie.
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    for (const header of ["cache-control", "expires", "pragma"]) {
+      const value = response.headers.get(header);
+      if (value) redirectResponse.headers.set(header, value);
+    }
+    return redirectResponse;
+  }
 
   return response;
 }

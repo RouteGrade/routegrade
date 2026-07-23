@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { EmailMagicLinkForm } from "@/components/auth/EmailMagicLinkForm";
@@ -19,10 +18,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
-    redirect(safeRedirect(rawNext));
+    redirect(safeRedirect(rawNext, "/"));
   }
 
-  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : undefined;
+  // Route through the same open-redirect guard used for the actual redirects
+  // below, rather than a separate, weaker inline check (the previous version
+  // here didn't reject the "/\evil.com" backslash trick that safeRedirect
+  // does). "/" isn't worth carrying as an explicit ?next= — it's the default.
+  const validatedNext = rawNext ? safeRedirect(rawNext) : null;
+  const next = validatedNext && validatedNext !== "/" ? validatedNext : undefined;
 
   return (
     <main className="flex min-h-dvh w-full items-center justify-center bg-zinc-950 p-6">
@@ -58,11 +62,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <EmailMagicLinkForm next={next} />
 
-        <p className="mt-6 text-center text-xs text-zinc-500">
-          <Link href="/" className="text-emerald-400 hover:text-emerald-300">
-            Back to routes
-          </Link>
-        </p>
+        {/* A real POST, not a Link — the guest cookie is httpOnly and set
+            server-side, and a plain "/" link would just bounce back here
+            via the entry gate in proxy.ts without it. */}
+        <form action="/auth/guest" method="POST" className="mt-6">
+          {next && <input type="hidden" name="next" value={next} />}
+          <button
+            type="submit"
+            className="flex h-9 w-full items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 transition hover:text-zinc-200"
+          >
+            Continue as guest
+          </button>
+        </form>
       </section>
     </main>
   );
