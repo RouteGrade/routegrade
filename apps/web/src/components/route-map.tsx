@@ -40,6 +40,10 @@ const DRAW_SOURCE = "draw-route";
 const DRAW_LAYER = "draw-route-line";
 const DRAW_GUIDE_SOURCE = "draw-guide";
 const DRAW_GUIDE_LAYER = "draw-guide-line";
+// Edge-pan while drawing: within this many px of a map edge, the camera scrolls
+// so the route can extend past the current viewport without lifting the finger.
+const EDGE_PAN_PX = 70;
+const EDGE_PAN_STEP = 9;
 // Camera-follow zoom while running; gentle enough to keep context visible.
 const FOLLOW_ZOOM = 15.5;
 
@@ -155,6 +159,10 @@ export type RouteMapProps = {
    * snapped coords, or null if snapping failed (the raw trace is kept).
    */
   onSnap?: (coordinates: Coord[]) => Promise<Coord[] | null>;
+  /** Recenter the map here (e.g. the runner's current location) when it changes. */
+  center?: [number, number] | null;
+  /** Flatten to a top-down, zoomed-in view — used while drawing a route. */
+  flat?: boolean;
 };
 
 export default function RouteMap({
@@ -164,6 +172,8 @@ export default function RouteMap({
   drawing = false,
   onDrawComplete,
   onSnap,
+  center = null,
+  flat = false,
 }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -182,6 +192,46 @@ export default function RouteMap({
     onDrawCompleteRef.current = onDrawComplete;
     onSnapRef.current = onSnap;
   }, [onDrawComplete, onSnap]);
+
+  // Recenter on a new location (e.g. the runner's current position after login).
+  const appliedCenterRef = useRef<[number, number] | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !center) return;
+    const prev = appliedCenterRef.current;
+    if (prev && prev[0] === center[0] && prev[1] === center[1]) return;
+    appliedCenterRef.current = center;
+    const apply = () =>
+      map.easeTo({ center, zoom: Math.max(map.getZoom(), 15), duration: 1200 });
+    if (styleReadyRef.current) apply();
+    else map.once("routegrade:ready", apply);
+  }, [center]);
+
+  // Flatten to a top-down, zoomed-in view while drawing (easier to draw on than
+  // the tilted 3D default); restore the 3D view when done. Tracks the previous
+  // value so it acts only on real changes — never on the initial 3D load, and
+  // (unlike a mount flag) never mis-fires when the map isn't ready on mount.
+  const prevFlatRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const prev = prevFlatRef.current;
+    if (prev === flat) return;
+    const isFirst = prev === null;
+    prevFlatRef.current = flat;
+    if (isFirst && !flat) return; // initial load is already 3D — nothing to do
+    const apply = () =>
+      flat
+        ? map.easeTo({
+            pitch: 0,
+            bearing: 0,
+            zoom: Math.max(map.getZoom(), 16),
+            duration: 600,
+          })
+        : map.easeTo({ pitch: 45, bearing: -17, duration: 600 });
+    if (styleReadyRef.current) apply();
+    else map.once("routegrade:ready", apply);
+  }, [flat]);
 
   // Render-phase adjustment: a fresh run always starts with follow engaged.
   if (follow !== prevFollow) {
@@ -444,6 +494,19 @@ export default function RouteMap({
     };
     const onMove = (e: PointerEvent) => {
       if (!active) return;
+      // Pan the map when the pointer nears an edge, so a route can be drawn
+      // past the current viewport without lifting the finger.
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      let dx = 0;
+      let dy = 0;
+      if (x < EDGE_PAN_PX) dx = -EDGE_PAN_STEP;
+      else if (x > rect.width - EDGE_PAN_PX) dx = EDGE_PAN_STEP;
+      if (y < EDGE_PAN_PX) dy = -EDGE_PAN_STEP;
+      else if (y > rect.height - EDGE_PAN_PX) dy = EDGE_PAN_STEP;
+      if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { duration: 0 });
+
       points.push(toCoord(e));
       setData(DRAW_GUIDE_SOURCE, points);
       const now = performance.now();
