@@ -1,5 +1,7 @@
 # Deployment — Vercel
 
+> Also mirrored in Notion: [Deployment](https://app.notion.com/p/3a5dc99a22218123bf51c176dc16e764). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 RouteGrade ships as two Vercel projects plus the existing Supabase-hosted
 Postgres. First deployed 2026-07-17 (MVP 4).
 

@@ -1,5 +1,7 @@
 # OSRM cutover runbook — driving demo → self-hosted `foot`
 
+> Also mirrored in Notion: [OSRM Cutover Runbook](https://app.notion.com/p/3a5dc99a2221817eb24cec6bc5f73344). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 Operational runbook for switching `/v1/routes/plan` from the public OSRM demo
 (`driving` profile) to a self-hosted `foot` instance. Owned by the founder;
 executed once per host provisioning. Cutover itself is env-vars-only: no code
@@ -161,5 +163,6 @@ across 2–10 km loops. The scoring v1 "0-point" anchor sits at 12/km
 (see `docs/scoring.md`), so many pedestrian loops in dense downtowns will
 land in the D band on this input alone. Behaviour is expected and
 consistent with the v1 heuristic — real intersection counts and anchor
-recalibration are tracked under Phase A (`docs/BACKLOG.md`). No cutover
+recalibration are tracked under Phase A in the Backlog database in Notion.
+No cutover
 change addresses this.

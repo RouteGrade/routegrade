@@ -1,5 +1,7 @@
 # Supabase project setup for RouteGrade
 
+> Also mirrored in Notion: [Supabase Setup](https://app.notion.com/p/3a5dc99a2221816db171c721281959c9). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 RouteGrade MVP 2 authenticates users through Supabase Auth. This guide covers
 the exact manual steps a developer must complete before the local stack can
 sign a user in.

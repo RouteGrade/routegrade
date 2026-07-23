@@ -1,5 +1,7 @@
 # Routing setup — providers, env vars, and Phase 0 decisions
 
+> Also mirrored in Notion: [Routing Setup](https://app.notion.com/p/3a5dc99a222181d08c66cc8356ed88f3). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 MVP 3 replaced the hard-coded sample route with real generation:
 `POST /v1/routes/plan` orchestrates **geocode → route candidates → elevation →
 scoring** and returns scored GeoJSON loops.

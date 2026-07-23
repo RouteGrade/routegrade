@@ -1,5 +1,7 @@
 # Production smoke test
 
+> Also mirrored in Notion: [Smoke Test](https://app.notion.com/p/3a5dc99a2221818788b2d1defa95cb87). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 `scripts/smoke-test.sh` is a self-contained shell smoke test for the
 deployed RouteGrade web + API. It exists because production sign-in was
 silently broken for days after MVP 4 (the callback URL redirected to

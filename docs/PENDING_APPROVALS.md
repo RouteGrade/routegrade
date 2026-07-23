@@ -1,5 +1,11 @@
 # Pending Approvals
 
+> **Moved to Notion (2026-07-22).** This file is now a frozen historical
+> snapshot as of the cutover — the company-heartbeat skill no longer reads or
+> writes it. Live queue: [Pending Approvals database](https://app.notion.com/p/e718a8d7a21b4bcc848a151991cc040d)
+> in the [Engineering Docs](https://app.notion.com/p/3a5dc99a222181c3af65db78a0b33d56) space.
+> Give verdicts by editing the **Status** property on rows there, not here.
+
 Decisions the autonomous heartbeat is NOT allowed to make. Each entry needs a
 human (founder) verdict. The heartbeat reads this file every run: entries under
 **Approved** get executed and moved to `DECISIONS.md`; entries under **Rejected**

@@ -1,5 +1,7 @@
 # Scoring function v1 — inputs, weights, and known limits
 
+> Also mirrored in Notion: [Scoring](https://app.notion.com/p/3a5dc99a22218103b997c78bd52b3724). This file is the source of truth; re-sync the Notion copy when this changes materially.
+
 Implemented in `services/api/app/services/scoring.py`. Output is a numeric
 score (0–100, one decimal) plus a letter grade shown on the route card and
 stored on save.

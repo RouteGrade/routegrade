@@ -11,11 +11,51 @@ Your job is to move the company forward by one solid increment, exactly as a
 disciplined startup team would in a 3-hour block — and to escalate, not decide,
 anything that changes the direction of the company or its products.
 
+## Company operating state lives in Notion, not git
+
+As of 2026-07-22, the four state files that used to live under `docs/` were
+migrated to Notion databases. **Notion is now the source of truth** — read and
+write these via the `mcp__notion__*` tools, not the filesystem. The old
+`docs/*.md` files are frozen historical snapshots (each has a banner pointing
+here) and must not be read or written by heartbeat runs.
+
+All four databases live under the **Engineering Docs** page
+(`https://app.notion.com/p/3a5dc99a222181c3af65db78a0b33d56`) in the
+**RouteGrade** Notion workspace:
+
+| State | Notion database | Data source ID (for `query_data_sources`) |
+| --- | --- | --- |
+| Backlog | https://app.notion.com/p/8e3359fcb6634485b221b35fa3819a4f | `bf94637c-9071-4d16-af2d-4966c7beacd4` |
+| Decisions Log | https://app.notion.com/p/97f6f76a019945ceaafd609e4ed3ae46 | `78a28a8e-bf10-4f2c-8db0-628b0dfdedcf` |
+| Heartbeat Log | https://app.notion.com/p/4d0f2abcc32346a0bbb05964049cdc02 | `6f74446f-8a92-4b98-8713-33c4ec987403` |
+| Pending Approvals | https://app.notion.com/p/e718a8d7a21b4bcc848a151991cc040d | `aabc1618-77c6-46a1-b12f-393269b6da7c` |
+
+**Reading**: prefer `mcp__notion__notion-query-data-sources` against the data
+source ID. If that tool is unavailable (its plan tier can lapse — check
+`notion-fetch` on `id: "self"` for `current_tool_access` if queries start
+failing), fall back to `mcp__notion__notion-fetch` on the database URL for
+schema + a page listing, or `mcp__notion__notion-search` with
+`data_source_url` set to `collection://<data source ID>`.
+
+**Writing**: `mcp__notion__notion-create-pages` with
+`parent: {"type": "data_source_id", "data_source_id": "<id>"}` to add rows;
+`mcp__notion__notion-update-page` with `command: "update_properties"` to
+change a row's `Status` or other fields. Always `notion-fetch` the data
+source first if you don't already have its exact property names/options from
+the table above — property names are case- and space-sensitive.
+
+Reference docs (Deployment, Routing Setup, Scoring, Supabase Setup, Smoke
+Test, OSRM Cutover Runbook, Proposals Process) are also mirrored as regular
+Notion pages under Engineering Docs, but **git remains their source of
+truth** — keep editing the `docs/*.md` files for those as normal, and ask
+technical-writer to re-sync the Notion mirror when they change materially.
+
 ## Hard guardrails — NEVER do autonomously
 
-These require founder approval. If a run concludes one of these is needed, write
-a proposal to `docs/PENDING_APPROVALS.md` (format is in the file) and move on to
-other work. Do NOT execute it, even partially:
+These require founder approval. If a run concludes one of these is needed, add
+a row to the **Pending Approvals** database (`Status: Awaiting decision` or
+`Founder action needed`, format below) and move on to other work. Do NOT
+execute it, even partially:
 
 1. Creating, sunsetting, or pivoting a product
 2. Renaming the company or any product; branding changes
@@ -32,32 +72,47 @@ Everything else — implementing backlog features, fixing bugs, writing tests,
 refactoring within the current architecture, updating docs, grooming the
 backlog — is yours to do without asking.
 
+Pending Approvals row format (properties on the `Pending Approvals` data
+source): `Title`, `Raised Date`, `Raised By`, `Type` (new-product |
+direction-change | architecture | schema-destructive | deploy | spend |
+org-change | other), `Status` (Awaiting decision | Founder action needed |
+Approved | Rejected), `Proposal` (what is being proposed), `Recommendation`
+(what the raising agent recommends and why).
+
 ## Run procedure
 
 ### 1. Read company state (always first)
 
-- `docs/PENDING_APPROVALS.md` — the founder's verdicts since last run
-- `docs/BACKLOG.md` — the prioritized work queue
-- `docs/HEARTBEAT_LOG.md` — what the last runs did (don't redo work)
-- `docs/DECISIONS.md` and `milestones/` — current direction and constraints
-- `git status`, recent `git log`, and open `heartbeat/*` branches/PRs — actual repo state
+- **Pending Approvals** database — the founder's verdicts since last run
+  (rows with `Status: Approved` or `Status: Rejected` that you haven't
+  processed yet)
+- **Backlog** database — the prioritized work queue (`Status` = Now/Next/
+  Later/Icebox/Done, `Priority` = URGENT/EMERGENCY/CRITICAL/P1/P2/P3/CLEANUP)
+- **Heartbeat Log** database — what the last runs did (don't redo work);
+  sort/read by `Run Date` descending
+- **Decisions Log** database and `milestones/` — current direction and
+  constraints
+- `git status`, recent `git log`, and open `heartbeat/*` branches/PRs — actual
+  repo state
 
 ### 2. Process founder verdicts
 
-- Items under **Approved** in `PENDING_APPROVALS.md`: these are now sanctioned —
-  execute them this run (or add to backlog as P1 if too big for one run), then
-  move the entry to `docs/DECISIONS.md` as a decision record.
-- Items under **Rejected**: archive the entry in place with a one-line note;
-  remove any related backlog items.
+- Pending Approvals rows with `Status: Approved`: these are now sanctioned —
+  execute them this run (or add to Backlog as P1 if too big for one run), then
+  add a row to the **Decisions Log** database recording the decision.
+- Rows with `Status: Rejected`: leave them in place (they're already the
+  historical record); remove any related Backlog rows.
 
 ### 3. Pick the work
 
-- Take the highest-priority unblocked item(s) from `docs/BACKLOG.md` that fit in
-  one focused run. One item done well beats three half-done.
-- If the backlog is empty or stale, this run's work IS backlog grooming: act as
-  head-of-product, break the current milestone into concrete items, and add them.
-- If everything is blocked on approvals, do maintenance instead: test coverage,
-  dead code cleanup, doc updates, dependency patch bumps.
+- Take the highest-priority unblocked row(s) from the **Backlog** database
+  (`Status: Now` first) that fit in one focused run. One item done well beats
+  three half-done.
+- If the backlog is empty or stale, this run's work IS backlog grooming: act
+  as head-of-product, break the current milestone into concrete items, and
+  add rows.
+- If everything is blocked on approvals, do maintenance instead: test
+  coverage, dead code cleanup, doc updates, dependency patch bumps.
 
 ### 4. Execute through the org
 
@@ -89,31 +144,35 @@ Work on a branch: `heartbeat/<date>-<slug>`, never directly on main.
 
 If gates fail and can't be fixed within the run, commit nothing to the branch
 beyond WIP (pushed, so it isn't lost), note the failure honestly in the log,
-and add a P1 backlog item.
+and add a P1 Backlog row.
 
 ### 6. Close the run (always, even if nothing was done)
 
-The session is ephemeral — anything not pushed is lost. Persist state like this:
+The session is ephemeral — anything not written to Notion (or pushed to git,
+for code) is lost. Persist state like this:
 
-- **Company state files** (`docs/HEARTBEAT_LOG.md`, `docs/BACKLOG.md`,
-  `docs/PENDING_APPROVALS.md`, `docs/DECISIONS.md`): commit directly to `main`
-  as a docs-only commit (`heartbeat: log run YYYY-MM-DD HH:MM`) and push.
-  These files are the company's memory between runs — this is the one
-  sanctioned direct-to-main write, and it must contain ONLY these files.
-- **Code**: stays on its pushed `heartbeat/*` branch, never in the state commit.
+- **Company state** (Backlog, Decisions Log, Pending Approvals): update the
+  Notion databases directly via `notion-update-page` (status/priority
+  changes) and `notion-create-pages` (new rows). This is live the moment you
+  write it — no commit step, no approval needed for these particular writes
+  (they're company memory, not code or direction changes).
+- **Code**: stays on its pushed `heartbeat/*` branch, never committed to main.
+  (Unlike the old file-based flow, there is no more sanctioned direct-to-main
+  docs commit — state lives in Notion now.)
 
-Append an entry to `docs/HEARTBEAT_LOG.md` (format in file): what was done and
-verified, what was queued, what's blocked on the founder. Update
-`docs/BACKLOG.md` checkboxes/priorities to match reality. If any guardrail
-topic came up, confirm its proposal is in `docs/PENDING_APPROVALS.md`. The
-founder gives verdicts by editing `PENDING_APPROVALS.md` on `main` and by
-merging or closing `heartbeat/*` PRs.
+Add a row to the **Heartbeat Log** database (properties: `Run`, `Run Date`,
+`Did`, `Verified`, `Queued`, `Blocked` — format matches the existing rows):
+what was done and verified, what was queued, what's blocked on the founder.
+Update **Backlog** rows' `Status`/`Priority` to match reality. If any
+guardrail topic came up, confirm its row exists in **Pending Approvals**. The
+founder gives verdicts by editing the `Status` property on Pending Approvals
+rows in Notion, and by merging or closing `heartbeat/*` PRs.
 
 ## Effort discipline
 
 - Budget the run like a startup: ~one meaningful increment per run. Stop at a
   clean, verified state rather than starting something you can't finish.
-- Never invent scope. If there is genuinely nothing to do, say so in the log —
-  a short honest entry beats manufactured work.
-- Every run must leave the repo in a state where the next run (or the founder)
-  can pick up from the log alone.
+- Never invent scope. If there is genuinely nothing to do, say so in the
+  Heartbeat Log — a short honest entry beats manufactured work.
+- Every run must leave the repo (and the Notion state) in a place where the
+  next run (or the founder) can pick up from the Heartbeat Log alone.

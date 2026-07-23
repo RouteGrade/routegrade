@@ -1,5 +1,10 @@
 # Heartbeat Log
 
+> **Moved to Notion (2026-07-22).** This file is now a frozen historical
+> snapshot as of the cutover — the company-heartbeat skill no longer reads or
+> writes it. Live log: [Heartbeat Log database](https://app.notion.com/p/4d0f2abcc32346a0bbb05964049cdc02)
+> in the [Engineering Docs](https://app.notion.com/p/3a5dc99a222181c3af65db78a0b33d56) space.
+
 One entry per autonomous run, newest first. Written by the company-heartbeat
 skill at the end of every run.
 

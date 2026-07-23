@@ -1,5 +1,10 @@
 # Company Backlog
 
+> **Moved to Notion (2026-07-22).** This file is now a frozen historical
+> snapshot as of the cutover — the company-heartbeat skill no longer reads or
+> writes it. Live backlog: [Backlog database](https://app.notion.com/p/8e3359fcb6634485b221b35fa3819a4f)
+> in the [Engineering Docs](https://app.notion.com/p/3a5dc99a222181c3af65db78a0b33d56) space.
+
 Prioritized work queue for the autonomous heartbeat. The heartbeat works items
 top-to-bottom. Items marked `[founder]` need founder-side accounts/dashboards.
 
