@@ -25,6 +25,24 @@ _EARTH_RADIUS_KM = 6371.0
 _INITIAL_PERIMETER_FACTOR = 3.4
 _MAX_ATTEMPTS = 4
 
+# OSRM's match service caps the number of trace coordinates per request (100 on
+# the reference server). A finger-drawn path can carry far more points than
+# that and than map-matching needs, so we thin it to at most this many,
+# always keeping the first and last point.
+_MATCH_MAX_POINTS = 100
+
+
+def _downsample(coordinates: list[list[float]], max_points: int) -> list[list[float]]:
+    """Evenly thin a coordinate list to <= max_points, keeping the endpoints."""
+
+    n = len(coordinates)
+    if n <= max_points:
+        return coordinates
+    # Pick evenly spaced indices across the range, endpoints inclusive.
+    step = (n - 1) / (max_points - 1)
+    idx = sorted({round(i * step) for i in range(max_points)})
+    return [coordinates[i] for i in idx]
+
 
 def _destination(lat: float, lng: float, bearing_deg: float, distance_km: float) -> tuple[float, float]:
     """Great-circle destination point from (lat, lng) along a bearing."""
@@ -126,5 +144,65 @@ class OSRMRoutingEngine:
             distance_km=distance_km,
             intersections_per_km=intersections_per_km,
             provider="osrm",
+            sidewalk_coverage=None,
+        )
+
+    def snap_trace(self, coordinates: list[list[float]]) -> GeneratedRoute:
+        points = _downsample(coordinates, _MATCH_MAX_POINTS)
+        if len(points) < 2:
+            raise ProviderError("routing", "trace needs at least two points")
+        coord_str = ";".join(f"{lng},{lat}" for lng, lat in points)
+
+        try:
+            response = httpx.get(
+                f"{self._base_url}/match/v1/{self._profile}/{coord_str}",
+                params={
+                    "geometries": "geojson",
+                    "overview": "full",
+                    "steps": "true",
+                    # `tidy` lets OSRM clean up noisy, densely-sampled input
+                    # (exactly what a finger drag produces) before matching.
+                    "tidy": "true",
+                },
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise ProviderError("routing", f"match request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError("routing", "non-JSON match response") from exc
+
+        if payload.get("code") != "Ok" or not payload.get("matchings"):
+            raise ProviderError("routing", f"no match: {payload.get('code', 'unknown')}")
+
+        # A trace can split into several matchings (gaps the matcher won't
+        # bridge); concatenate them in order and sum their signals.
+        merged: list[list[float]] = []
+        distance_m = 0.0
+        maneuvers = 0
+        for matching in payload["matchings"]:
+            try:
+                geometry = matching["geometry"]["coordinates"]
+                distance_m += float(matching["distance"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ProviderError("routing", "malformed match payload") from exc
+            for c in geometry:
+                merged.append([float(c[0]), float(c[1])])
+            for leg in matching.get("legs", []):
+                for step in leg.get("steps", []):
+                    if step.get("maneuver", {}).get("type") not in {"depart", "arrive"}:
+                        maneuvers += 1
+
+        if len(merged) < 2:
+            raise ProviderError("routing", "degenerate matched geometry")
+
+        distance_km = distance_m / 1000.0
+        intersections_per_km = maneuvers / distance_km if distance_km > 0 else 0.0
+        return GeneratedRoute(
+            coordinates=merged,
+            distance_km=distance_km,
+            intersections_per_km=intersections_per_km,
+            provider="osrm-match",
             sidewalk_coverage=None,
         )

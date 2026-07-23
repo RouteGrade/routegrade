@@ -53,6 +53,15 @@ class RoutingEngine(Protocol):
         self, *, latitude: float, longitude: float, distance_km: float, bearing_deg: float
     ) -> GeneratedRoute: ...
 
+    def snap_trace(self, coordinates: list[list[float]]) -> GeneratedRoute:
+        """Snap a hand-drawn [lng, lat] trace onto the road network.
+
+        Returns the matched, routable geometry plus the same distance and
+        maneuver-density signals `generate_loop` produces, so a user-drawn
+        route can flow through the identical scoring pipeline.
+        """
+        ...
+
 
 class ElevationProvider(Protocol):
     def elevations(self, coordinates: list[list[float]]) -> list[float]:

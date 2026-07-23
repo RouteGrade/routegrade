@@ -19,7 +19,12 @@ from app.providers.base import AddressNotFound, ProviderError
 from app.providers.elevation import OpenElevationClient
 from app.providers.geocoding import NominatimGeocoder
 from app.providers.routing import OSRMRoutingEngine
-from app.schemas.routes import PlanRequest, PlanResponse
+from app.schemas.routes import (
+    CustomRouteRequest,
+    PlannedRoute,
+    PlanRequest,
+    PlanResponse,
+)
 from app.services.route_planner import RoutePlanner
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
@@ -138,5 +143,37 @@ def plan_route(
             detail={
                 "code": "provider_error",
                 "message": "A routing provider is unavailable. Please try again shortly.",
+            },
+        ) from None
+
+
+@router.post(
+    "/custom",
+    response_model=PlannedRoute,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def grade_custom_route(
+    payload: CustomRouteRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> PlannedRoute:
+    """Snap a user-drawn trace to the road network and grade it.
+
+    Public like /plan, and shares its per-IP budget — both fan out to the same
+    external routing/elevation providers.
+    """
+
+    name = (payload.name or "").strip() or "My route"
+    try:
+        return planner.grade_drawn(
+            coordinates=payload.coordinates,
+            preference=payload.preference,
+            name=name,
+        )
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "We couldn't snap that route to the map. Try drawing it again.",
             },
         ) from None
