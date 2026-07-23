@@ -60,12 +60,12 @@ technical-writer to re-sync the Notion mirror when they change materially.
 
 **Open MRs** (added 2026-07-23): every PR the heartbeat opens gets a row here
 — `Title`, `Branch`, `PR URL`, `Status` (Open/Merged/Closed, mirroring the
-real GitHub state), `Raised By`, `Opened Date`, `Summary`, and the actual
-diff pasted into the page content as a fenced ` ```diff ` block. The founder
-reviews the diff in Notion, then clicks through to the real GitHub PR to
+real GitHub state), `Raised By`, `Opened Date`, `Summary`. No diff in the
+page content (founder's call, 2026-07-22) — the PR URL is the review surface;
+the founder clicks through to GitHub to read the diff and
 approve/merge — **a Notion status change never merges anything by itself**;
 GitHub is always where the actual approve/merge happens. The heartbeat's job
-is to make sure the PR link and diff are there before the run ends.
+is to make sure the row and PR link are there before the run ends.
 
 **Founder Requests** (added 2026-07-23): a single page, not a database. The
 founder appends whatever they want — a request, an idea, a bug report — as an
@@ -188,10 +188,8 @@ Work on a branch: `heartbeat/<date>-<slug>`, never directly on main.
 5. **Log it to Open MRs**: `notion-create-pages` a row (`Title` = PR title,
    `Branch`, `PR URL` = the real `gh pr create` output URL, `Status: Open`,
    `Raised By` = the executing agent, `Opened Date`, `Summary` = 2-4
-   sentences) with the diff (`git diff main...HEAD`) pasted into the page
-   content inside a fenced ` ```diff ` block. If the diff is very large,
-   include the full thing anyway unless it's clearly unreasonable (e.g.
-   generated/lockfile-heavy) — trim only the noisy generated parts and say so.
+   sentences). No diff in the page content — the PR URL is where the founder
+   reads the actual diff, on GitHub.
 
 If gates fail and can't be fixed within the run, commit nothing to the branch
 beyond WIP (pushed, so it isn't lost), note the failure honestly in the log,
