@@ -6,6 +6,7 @@ import {
   OFF_ROUTE_M,
   pathLengthMeters,
   projectOntoPath,
+  remainingRouteFromDistance,
   sliceRouteAtDistance,
   spokenPace,
   type LngLat,
@@ -135,6 +136,45 @@ describe("sliceRouteAtDistance", () => {
     // a runner's progress along the route monotonically advancing).
     expect(sliceRouteAtDistance(route, alongPathM + 5).length).toBeGreaterThanOrEqual(
       slice.length,
+    );
+  });
+});
+
+describe("remainingRouteFromDistance", () => {
+  const route: LngLat[] = [
+    [-79.40, 43.65],
+    [-79.35, 43.65],
+    [-79.30, 43.65],
+  ];
+
+  it("is empty for an empty route", () => {
+    expect(remainingRouteFromDistance([], 100)).toEqual([]);
+  });
+
+  it("returns the full route at zero distance", () => {
+    expect(remainingRouteFromDistance(route, 0)).toEqual(route);
+  });
+
+  it("collapses to just the end point once target passes the total length", () => {
+    const total = pathLengthMeters(route);
+    expect(remainingRouteFromDistance(route, total + 10_000)).toEqual([
+      route[route.length - 1],
+    ]);
+  });
+
+  it("is the complement of sliceRouteAtDistance — the cut point is shared and nothing is duplicated or dropped", () => {
+    const midLng = (route[0][0] + route[1][0]) / 2;
+    const target: LngLat = [midLng, 43.65];
+    const { alongPathM } = projectOntoPath(target, route);
+
+    const before = sliceRouteAtDistance(route, alongPathM);
+    const after = remainingRouteFromDistance(route, alongPathM);
+
+    expect(before[before.length - 1]).toEqual(after[0]);
+    // Shrinking the target should only ever grow what's still ahead (matches
+    // a runner's remaining distance monotonically shrinking as they advance).
+    expect(remainingRouteFromDistance(route, alongPathM - 5).length).toBeGreaterThanOrEqual(
+      after.length,
     );
   });
 });
