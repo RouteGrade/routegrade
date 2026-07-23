@@ -400,7 +400,6 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
   // geometry effect above depend on `geometry`, and this one is declared
   // later, so whenever geometry changes React runs this one second in the
   // same commit and it gets the final say on layer visibility.
-  // always gets the final say on layer visibility for a given route.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
