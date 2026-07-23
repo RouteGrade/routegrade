@@ -34,6 +34,41 @@ type ApiStatus = "checking" | "online" | "offline";
 
 const PACE_MIN_PER_KM = 6;
 
+// A guest who taps "Sign in to save" bounces through /login?next=/ and would
+// otherwise land back on a blank planner — the plan lives in React state, not
+// the URL. Stash it in sessionStorage on the way out and rehydrate on return,
+// so the route they wanted to save is one tap away.
+const GUEST_PLAN_STASH_KEY = "rg_guest_plan";
+
+type GuestPlanStash = {
+  address: string;
+  coords: { latitude: number; longitude: number } | null;
+  distanceKm: number;
+  preference: Preference;
+  plan: PlanResponse;
+  activeIndex: number;
+};
+
+function stashGuestPlan(stash: GuestPlanStash) {
+  try {
+    sessionStorage.setItem(GUEST_PLAN_STASH_KEY, JSON.stringify(stash));
+  } catch {
+    // sessionStorage can be unavailable (private mode / disabled) — best-effort.
+  }
+}
+
+/** Read and clear the stash (one-shot). Returns null if absent or unparseable. */
+function takeGuestPlan(): GuestPlanStash | null {
+  try {
+    const raw = sessionStorage.getItem(GUEST_PLAN_STASH_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(GUEST_PLAN_STASH_KEY);
+    return JSON.parse(raw) as GuestPlanStash;
+  } catch {
+    return null;
+  }
+}
+
 const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = [
   {
     id: "quiet",
@@ -201,6 +236,28 @@ export default function RouteExplorer({
       cancelled = true;
     };
   }, [savedRouteId, isAuthenticated]);
+
+  // Restore a guest's in-progress plan after they bounce through /login to save
+  // it. One-shot: consumed and cleared on the first planner mount that finds a
+  // stash. A deep-linked saved route (?route=) takes precedence and skips this.
+  useEffect(() => {
+    if (savedRouteId) return;
+    // Consume the stash synchronously so a StrictMode double-mount can't apply
+    // it twice; defer the state writes so the effect body stays setState-free.
+    const stash = takeGuestPlan();
+    if (!stash) return;
+    const timer = setTimeout(() => {
+      setAddress(stash.address);
+      setCoords(stash.coords);
+      setDistanceKm(stash.distanceKm);
+      setPreference(stash.preference);
+      setPlan(stash.plan);
+      setActiveIndex(stash.activeIndex);
+      if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const active: ActiveRoute | null = plan
     ? {
@@ -658,6 +715,18 @@ export default function RouteExplorer({
               ) : (
                 <Link
                   href="/login?next=/"
+                  onClick={() => {
+                    if (plan) {
+                      stashGuestPlan({
+                        address,
+                        coords,
+                        distanceKm,
+                        preference,
+                        plan,
+                        activeIndex,
+                      });
+                    }
+                  }}
                   className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
                 >
                   Sign in to save this route

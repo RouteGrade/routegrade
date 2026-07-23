@@ -91,7 +91,11 @@ test.describe("run tracker · simulate mode", () => {
     await gotoPlanner(page);
     await planFixtureRoute(page);
     await expect(page.getByRole("heading", { name: FIXTURE_ROUTE_NAME })).toBeVisible();
-    await expect(page.getByText(`${ROUTE_DISTANCE_KM.toFixed(1)} km`)).toBeVisible();
+    // Distance shows in two places on the result card (the candidate chip and
+    // the stats grid) — scope to the "Distance" stat value to stay unambiguous.
+    await expect(
+      page.locator("dd", { hasText: `${ROUTE_DISTANCE_KM.toFixed(1)} km` }),
+    ).toBeVisible();
   });
 
   test("live stats update as the simulated runner moves", async ({ page }) => {
@@ -152,8 +156,13 @@ test.describe("run tracker · simulate mode", () => {
     await expect(page.getByRole("heading", { name: "Splits" })).toBeVisible();
     await expect(page.getByText("km 1", { exact: true })).toBeVisible();
 
-    // Summary distance carried over (still ~1.1 km).
-    await expect.poll(() => readDistanceKm(page)).toBeGreaterThan(1);
+    // Summary distance carried over (~1.1 km). The finish screen's distance now
+    // lives inside the shareable run card's canvas, surfaced via its aria-label.
+    const shareCard = page.getByRole("img", { name: /Run summary:/ });
+    await expect(shareCard).toBeVisible();
+    const summaryLabel = await shareCard.getAttribute("aria-label");
+    const summaryKm = Number(summaryLabel?.match(/([\d.]+)\s*km/)?.[1] ?? "NaN");
+    expect(summaryKm).toBeGreaterThan(1);
 
     // Guest (unauthenticated) sees the sign-in-to-save CTA, not a save button.
     await expect(
