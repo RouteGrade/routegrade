@@ -15,6 +15,7 @@ import {
   type PlannedRoute,
   type Preference,
 } from "@/lib/api/routes-client";
+import { deriveReasons } from "@/lib/scorecard";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
 import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
@@ -177,6 +178,8 @@ export default function RouteExplorer({
             sidewalk_coverage: null,
             score: saved.score,
             grade: saved.grade,
+            elevation_subscore: null,
+            intersection_subscore: null,
             within_tolerance: true,
             provider: "saved",
           },
@@ -314,6 +317,13 @@ export default function RouteExplorer({
   const sliderProgress = ((distanceKm - 1) / (15 - 1)) * 100;
   const activeSaved = active ? active.saved || savedIds.has(active.route.id) : false;
   const estMinutes = active ? Math.round(active.route.distance_km * PACE_MIN_PER_KM) : 0;
+  const gradeReasons = active ? deriveReasons(active.route) : [];
+  const subscoreFactors = active
+    ? [
+        { label: "Elevation", value: active.route.elevation_subscore },
+        { label: "Quietness", value: active.route.intersection_subscore },
+      ].filter((f): f is { label: string; value: number } => f.value !== null)
+    : [];
 
   const handleStartRun = () => {
     primeSpeech(); // unlock speech synthesis while we still have a user gesture
@@ -558,6 +568,46 @@ export default function RouteExplorer({
                 </div>
               ))}
             </dl>
+
+            {(subscoreFactors.length > 0 || gradeReasons.length > 0) && (
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Why this grade
+                </p>
+                {subscoreFactors.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {subscoreFactors.map((factor) => (
+                      <div key={factor.label} className="flex items-center gap-2">
+                        <span className="w-16 shrink-0 text-[11px] text-zinc-400">
+                          {factor.label}
+                        </span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400"
+                            style={{ width: `${Math.round(factor.value)}%` }}
+                          />
+                        </div>
+                        <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-zinc-300">
+                          {Math.round(factor.value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {gradeReasons.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {gradeReasons.map((reason, i) => (
+                      <li
+                        key={`${reason.key}-${i}`}
+                        className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+                      >
+                        {reason.text}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <div className="mt-3 flex flex-col gap-2">
               <button

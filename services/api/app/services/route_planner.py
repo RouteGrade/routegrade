@@ -120,6 +120,8 @@ class RoutePlanner:
             sidewalk_coverage=generated.sidewalk_coverage,
             score=result.score,
             grade=result.grade,  # type: ignore[arg-type]
+            elevation_subscore=result.elevation_subscore,
+            intersection_subscore=result.intersection_subscore,
             within_tolerance=deviation <= self._tolerance,
             provider=generated.provider,
         )

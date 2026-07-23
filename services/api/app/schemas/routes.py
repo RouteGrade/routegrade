@@ -68,6 +68,8 @@ class PlannedRoute(BaseModel):
     sidewalk_coverage: float | None
     score: float
     grade: Literal["A", "B", "C", "D"]
+    elevation_subscore: float
+    intersection_subscore: float
     within_tolerance: bool
     provider: str
 
