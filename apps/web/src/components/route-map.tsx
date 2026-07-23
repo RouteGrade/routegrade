@@ -13,10 +13,15 @@ const MAP_STYLE_URL =
 
 const ROUTE_SOURCE = "active-route";
 const ROUTE_DASHED_LAYER = "route-dashed";
+const ROUTE_ARROW_ICON = "route-arrow";
+const ROUTE_ARROWS_LAYER = "route-direction-arrows";
 // The geometry effect below only ever *hides* ROUTE_DASHED_LAYER (when the
 // route disappears) — showing it is owned solely by the follow effect, so
-// the two never fight over the same layer's visibility.
-const ROUTE_LAYERS = ["route-glow", "route-line"] as const;
+// the two never fight over the same layer's visibility. Direction arrows,
+// unlike the dashed/gradient line swap, are relevant in every mode (they're
+// what tells a runner which way around a loop or overlapping out-and-back
+// to go), so they're owned here alongside the base line layers instead.
+const ROUTE_LAYERS = ["route-glow", "route-line", ROUTE_ARROWS_LAYER] as const;
 const TRAVELED_SOURCE = "run-traveled";
 const TRAVELED_LAYER = "run-traveled-line";
 // Camera-follow zoom while running; gentle enough to keep context visible.
@@ -79,6 +84,37 @@ function partialLine(coords: Coord[], distances: number[], target: number): Coor
 /** Gentler than cubic — the line eases in softly and coasts to a stop. */
 function easeInOutSine(t: number): number {
   return -(Math.cos(Math.PI * t) - 1) / 2;
+}
+
+/**
+ * An east-pointing (+x) chevron for the direction-arrow layer. With
+ * `symbol-placement: "line"` + `icon-rotation-alignment: "map"`, MapLibre
+ * aligns the icon's *x-axis* with the line's tangent (per the style spec —
+ * not its y-axis), so the tip has to point right, not up, for the rendered
+ * arrow to actually follow the route instead of sitting perpendicular to it.
+ */
+function createArrowIcon(size: number): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new ImageData(size, size);
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const half = size * 0.34;
+  ctx.beginPath();
+  ctx.moveTo(cx + half, cy);
+  ctx.lineTo(cx - half * 0.7, cy - half * 0.65);
+  ctx.lineTo(cx - half * 0.7, cy + half * 0.65);
+  ctx.closePath();
+  ctx.fillStyle = "#fafafa";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(9, 9, 11, 0.7)";
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.stroke();
+
+  return ctx.getImageData(0, 0, size, size);
 }
 
 export type RunnerState = {
@@ -221,6 +257,25 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
           "line-color": "#fafafa",
           "line-width": 5,
           "line-opacity": 0.9,
+        },
+      });
+      // Direction arrows along the route — a plain line can't show which way
+      // to go where a loop closes on itself or an out-and-back doubles back
+      // over the same road, so this is on top of everything else drawn.
+      map.addImage(ROUTE_ARROW_ICON, createArrowIcon(64), { pixelRatio: 2 });
+      map.addLayer({
+        id: ROUTE_ARROWS_LAYER,
+        type: "symbol",
+        source: ROUTE_SOURCE,
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 80,
+          "icon-image": ROUTE_ARROW_ICON,
+          "icon-size": 0.8,
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          visibility: "none",
         },
       });
       styleReadyRef.current = true;
