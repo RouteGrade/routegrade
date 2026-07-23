@@ -17,7 +17,7 @@ import {
   type LngLat,
 } from "@/lib/geo";
 import type { Grade } from "@/lib/scorecard";
-import { RouteScorecard } from "./route-scorecard";
+import { RunShareCard } from "./run-share-card";
 import { EMPTY_RATING, hasRating, RunRating, type RatingDraft } from "./run-rating";
 
 /** Route metadata the tracker needs — planned and saved routes both satisfy it. */
@@ -112,7 +112,8 @@ export default function RunTracker({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rating, setRating] = useState<RatingDraft>(EMPTY_RATING);
-  const [scorecardOpen, setScorecardOpen] = useState(false);
+  // Snapshot of the ran GPS trace, taken at finish for the shareable card.
+  const [finishedPath, setFinishedPath] = useState<LngLat[]>([]);
 
   const routeCoords = useMemo(
     () => route.geometry.coordinates as LngLat[],
@@ -368,6 +369,7 @@ export default function RunTracker({
       resumedAtRef.current = null;
     }
     setElapsedS(Math.floor(movingMsRef.current / 1000));
+    setFinishedPath(traveledRef.current.slice());
     setPhase("finished");
     const km = distanceRef.current / 1000;
     speak(
@@ -441,6 +443,9 @@ export default function RunTracker({
   const avgPaceS = km > 0.05 ? elapsedS / km : null;
   const progress = routeLengthM > 0 ? Math.min(1, alongRouteM / routeLengthM) : 0;
   const remainingKm = Math.max(0, (routeLengthM - alongRouteM) / 1000);
+  // The route the runner actually ran, for the shareable card. Falls back to
+  // the planned geometry when the GPS trace is too sparse (e.g. weak signal).
+  const runPath = finishedPath.length >= 2 ? finishedPath : routeCoords;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20">
@@ -618,26 +623,24 @@ export default function RunTracker({
                   </h2>
                 </header>
 
-                <div className="mt-4 text-center">
-                  <span className="font-display text-6xl font-extrabold tabular-nums tracking-tight text-transparent bg-linear-to-br from-emerald-400 to-lime-400 bg-clip-text">
-                    {km.toFixed(2)}
-                  </span>
-                  <span className="ml-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
-                    km
-                  </span>
+                {/* The animated, shareable run card is the hero of the finish
+                    screen — it shows the ran route, distance, time, pace and
+                    grade, and exports the animation as a video. */}
+                <div className="mt-4">
+                  <RunShareCard
+                    data={{
+                      name: route.name,
+                      path: runPath,
+                      distanceKm: km,
+                      durationS: elapsedS,
+                      avgPaceS,
+                      grade: route.grade,
+                      score: route.score,
+                      intersectionsPerKm: route.intersections_per_km ?? null,
+                      sidewalkCoverage: route.sidewalk_coverage ?? null,
+                    }}
+                  />
                 </div>
-
-                <dl className="mt-4 grid grid-cols-2 gap-1.5 text-center">
-                  {[
-                    { label: "Time", value: formatDuration(elapsedS) },
-                    { label: "Avg pace", value: `${formatPace(avgPaceS)} /km` },
-                  ].map((stat) => (
-                    <div key={stat.label} className="rounded-xl border border-white/10 bg-white/5 py-2.5">
-                      <dt className="text-[10px] uppercase tracking-wider text-zinc-500">{stat.label}</dt>
-                      <dd className="text-base font-semibold tabular-nums text-white">{stat.value}</dd>
-                    </div>
-                  ))}
-                </dl>
 
                 {splits.length > 0 && (
                   <div className="mt-4">
@@ -706,19 +709,6 @@ export default function RunTracker({
                       {saveError}
                     </p>
                   )}
-                  {route.grade && (
-                    <button
-                      type="button"
-                      onClick={() => setScorecardOpen(true)}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                        <path d="M16 6l-4-4-4 4M12 2v13" />
-                      </svg>
-                      Share scorecard
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={onExit}
@@ -731,23 +721,6 @@ export default function RunTracker({
             </div>
           )}
         </>
-      )}
-
-      {scorecardOpen && route.grade && (
-        <div className="pointer-events-auto">
-          <RouteScorecard
-            route={{
-              name: route.name,
-              grade: route.grade,
-              score: route.score ?? 0,
-              distance_km: route.distance_km,
-              elevation_gain_m: route.elevation_gain_m ?? 0,
-              intersections_per_km: route.intersections_per_km ?? null,
-              sidewalk_coverage: route.sidewalk_coverage ?? null,
-            }}
-            onClose={() => setScorecardOpen(false)}
-          />
-        </div>
       )}
     </div>
   );
