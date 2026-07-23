@@ -78,6 +78,32 @@ per-request with strict transactional semantics — that's SQLAlchemy + Alembic
 territory. dbt reads from the operational tables and produces analytics models
 without ever writing back.
 
+## Sign-in entry flow
+
+A first-touch visitor who has never signed in and never chosen guest mode is
+redirected from `/` to `/login` (a 307 from `apps/web/src/proxy.ts`). This gives
+RouteGrade a proper sign-in-first entry point rather than dropping anonymous
+visitors straight into the planner. The gate only fires on `/`, only for
+unauthenticated visitors, and only until the browser gets past it once — anyone
+with a Supabase session or the `rg_guest` cookie flows straight through. Deep
+links survive the detour via a `next` query param, and the gate no-ops entirely
+when Supabase isn't configured, so local dev without auth still works.
+
+There are three ways past the gate, all offered on `/login`:
+
+- **Google** or **email magic link** — a real Supabase sign-in. Signed-in
+  users land back on `/` (or their original deep link), not `/account`.
+- **Continue as guest** — `POST /auth/guest` sets a long-lived, httpOnly
+  `rg_guest` cookie (400-day lifetime, matching Supabase's own session cookie)
+  so the gate never shows again on that browser.
+
+**Guest capability boundary** (founder-approved, 2026-07-23): guests can plan,
+run, and view scorecards; only **Save** is gated behind a real sign-in. Guest
+run history is intentionally not persisted locally for now.
+
+The production smoke test's check table exercises this flow end-to-end — see
+`docs/SMOKE_TEST.md` rather than duplicating the checks here.
+
 ## Repository structure
 
 ```text
