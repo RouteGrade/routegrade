@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { LineString } from "geojson";
-import { OFF_ROUTE_M, projectOntoPath, sliceRouteAtDistance } from "@/lib/geo";
+import {
+  OFF_ROUTE_M,
+  projectOntoPath,
+  remainingRouteFromDistance,
+  sliceRouteAtDistance,
+} from "@/lib/geo";
 
 const DOWNTOWN_TORONTO: [number, number] = [-79.3832, 43.6532];
 const MAP_STYLE_URL =
@@ -15,6 +20,11 @@ const ROUTE_SOURCE = "active-route";
 const ROUTE_DASHED_LAYER = "route-dashed";
 const ROUTE_ARROW_ICON = "route-arrow";
 const ROUTE_ARROWS_LAYER = "route-direction-arrows";
+// A dedicated source, not ROUTE_SOURCE — arrows need to show only the road
+// *ahead* of the runner once one exists (see the runner-telemetry effect),
+// which is a different slice of the route than the persistent dashed/
+// gradient line, itself always shows.
+const ROUTE_ARROWS_SOURCE = "route-direction-source";
 // The geometry effect below only ever *hides* ROUTE_DASHED_LAYER (when the
 // route disappears) — showing it is owned solely by the follow effect, so
 // the two never fight over the same layer's visibility. Direction arrows,
@@ -262,11 +272,15 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
       // Direction arrows along the route — a plain line can't show which way
       // to go where a loop closes on itself or an out-and-back doubles back
       // over the same road, so this is on top of everything else drawn.
+      map.addSource(ROUTE_ARROWS_SOURCE, {
+        type: "geojson",
+        data: lineStringData([]),
+      });
       map.addImage(ROUTE_ARROW_ICON, createArrowIcon(64), { pixelRatio: 2 });
       map.addLayer({
         id: ROUTE_ARROWS_LAYER,
         type: "symbol",
-        source: ROUTE_SOURCE,
+        source: ROUTE_ARROWS_SOURCE,
         layout: {
           "symbol-placement": "line",
           "symbol-spacing": 80,
@@ -325,6 +339,9 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
       const visible = coordinates.length >= 2;
 
       const source = map.getSource(ROUTE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      const arrowsSource = map.getSource(ROUTE_ARROWS_SOURCE) as
+        | maplibregl.GeoJSONSource
+        | undefined;
       if (!source) return;
 
       for (const id of ROUTE_LAYERS) {
@@ -344,8 +361,14 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
 
       if (!visible) {
         source.setData(lineStringData([]));
+        arrowsSource?.setData(lineStringData([]));
         return;
       }
+
+      // Arrows show the whole route immediately — no need to mirror the
+      // draw-in animation below; the runner-telemetry effect narrows this
+      // down to "the road ahead" once a run with live position data starts.
+      arrowsSource?.setData(lineStringData(coordinates));
 
       // Start-point marker appears immediately — it anchors the animation.
       const markerElement = document.createElement("div");
@@ -509,11 +532,19 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
     const traveledSource = map.getSource(TRAVELED_SOURCE) as
       | maplibregl.GeoJSONSource
       | undefined;
+    const arrowsSource = map.getSource(ROUTE_ARROWS_SOURCE) as
+      | maplibregl.GeoJSONSource
+      | undefined;
 
     if (!runner) {
       runnerMarkerRef.current?.remove();
       runnerMarkerRef.current = null;
       traveledSource?.setData(lineStringData([]));
+      // Back to showing the whole route's arrows — a run just ended (or
+      // never started), so there's no "road ahead of the runner" to narrow
+      // to anymore.
+      const coordinates = (geometry?.coordinates ?? []) as Coord[];
+      if (coordinates.length >= 2) arrowsSource?.setData(lineStringData(coordinates));
       return;
     }
 
@@ -537,9 +568,16 @@ export default function RouteMap({ geometry, runner = null, follow = false }: Ro
 
     // Highlight the portion of the *route* covered so far (not the raw,
     // jittery GPS trace) — grows from the start as the runner advances.
+    // Arrows narrow to the road still ahead: on a loop or out-and-back that
+    // doubles back over itself, the already-run direction drops out of the
+    // arrows layer entirely once it's behind the runner, so a given stretch
+    // never shows both directions at once past wherever they've reached.
     if (nearest) {
       traveledSource?.setData(
         lineStringData(sliceRouteAtDistance(routeCoordinates, nearest.alongPathM)),
+      );
+      arrowsSource?.setData(
+        lineStringData(remainingRouteFromDistance(routeCoordinates, nearest.alongPathM)),
       );
     }
 

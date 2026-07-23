@@ -131,6 +131,40 @@ export function sliceRouteAtDistance(coords: LngLat[], targetM: number): LngLat[
   return out;
 }
 
+/**
+ * Portion of `coords` from `targetM` meters along the path to the end, with
+ * an interpolated point at the cut — the complement of `sliceRouteAtDistance`.
+ * On an out-and-back or a loop that retraces a road, feeding this the
+ * runner's `alongPathM` keeps direction-arrow rendering limited to the road
+ * ahead: the already-run direction (behind the cut) drops out entirely, so
+ * only one direction is ever shown for a given stretch until the runner
+ * actually reaches wherever the route doubles back over itself.
+ */
+export function remainingRouteFromDistance(coords: LngLat[], targetM: number): LngLat[] {
+  if (coords.length === 0) return [];
+  const cosLat = routeCosLat(coords);
+  const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M;
+  const mPerDegLng = mPerDegLat * cosLat;
+
+  let cumulative = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const dx = (coords[i][0] - coords[i - 1][0]) * mPerDegLng;
+    const dy = (coords[i][1] - coords[i - 1][1]) * mPerDegLat;
+    const segment = Math.hypot(dx, dy);
+    if (cumulative + segment <= targetM) {
+      cumulative += segment;
+      continue;
+    }
+    const t = segment > 0 ? Math.max(0, Math.min(1, (targetM - cumulative) / segment)) : 0;
+    const cut: LngLat = [
+      coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
+      coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
+    ];
+    return [cut, ...coords.slice(i)];
+  }
+  return [coords[coords.length - 1]];
+}
+
 /** "5:42" from seconds-per-km; em dash when pace is meaningless. */
 export function formatPace(secondsPerKm: number | null): string {
   if (secondsPerKm === null || !Number.isFinite(secondsPerKm) || secondsPerKm <= 0) {
