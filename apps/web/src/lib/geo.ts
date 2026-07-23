@@ -14,6 +14,17 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
+/**
+ * Reference latitude for a route's local equirectangular frame — anchored to
+ * the route itself (not whatever point happens to be queried against it) so
+ * `projectOntoPath` and `sliceRouteAtDistance` measure "distance along the
+ * route" the same way and agree on where a given meter mark actually falls.
+ */
+function routeCosLat(coords: LngLat[]): number {
+  const lat = coords[Math.floor(coords.length / 2)]?.[1] ?? 0;
+  return Math.cos(toRad(lat));
+}
+
 /** Great-circle distance between two points, in meters. */
 export function haversineMeters(a: LngLat, b: LngLat): number {
   const dLat = toRad(b[1] - a[1]);
@@ -44,7 +55,7 @@ export function projectOntoPath(
   point: LngLat,
   coords: LngLat[],
 ): { distanceToPathM: number; alongPathM: number; nearestPoint: LngLat } {
-  const cosLat = Math.cos(toRad(point[1]));
+  const cosLat = routeCosLat(coords);
   const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M;
   const mPerDegLng = mPerDegLat * cosLat;
 
@@ -85,6 +96,40 @@ export function projectOntoPath(
 
 /** Distance from the route past which a runner is considered off it. */
 export const OFF_ROUTE_M = 50;
+
+/**
+ * Portion of `coords` from the start up to `targetM` meters along the path,
+ * with an interpolated point at the cut. Feed it `projectOntoPath`'s
+ * `alongPathM` to slice a route at a runner's current progress — both use
+ * the same route-anchored equirectangular frame (see `routeCosLat`), so the
+ * cut lands exactly at the runner's projected foot rather than drifting.
+ */
+export function sliceRouteAtDistance(coords: LngLat[], targetM: number): LngLat[] {
+  if (coords.length === 0) return [];
+  const cosLat = routeCosLat(coords);
+  const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M;
+  const mPerDegLng = mPerDegLat * cosLat;
+
+  const out: LngLat[] = [coords[0]];
+  let cumulative = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const dx = (coords[i][0] - coords[i - 1][0]) * mPerDegLng;
+    const dy = (coords[i][1] - coords[i - 1][1]) * mPerDegLat;
+    const segment = Math.hypot(dx, dy);
+    if (cumulative + segment <= targetM) {
+      out.push(coords[i]);
+      cumulative += segment;
+      continue;
+    }
+    const t = segment > 0 ? Math.max(0, Math.min(1, (targetM - cumulative) / segment)) : 0;
+    out.push([
+      coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
+      coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
+    ]);
+    return out;
+  }
+  return out;
+}
 
 /** "5:42" from seconds-per-km; em dash when pace is meaningless. */
 export function formatPace(secondsPerKm: number | null): string {
