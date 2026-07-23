@@ -107,6 +107,8 @@ def test_plan_returns_scored_routes_for_address(plan_client):
     assert top["geometry"]["type"] == "LineString"
     assert top["within_tolerance"] is True
     assert 0 <= top["score"] <= 100
+    assert 0 <= top["elevation_subscore"] <= 100
+    assert 0 <= top["intersection_subscore"] <= 100
 
 
 def test_plan_accepts_coordinates_without_geocoding(plan_client):

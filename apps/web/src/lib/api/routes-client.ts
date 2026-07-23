@@ -21,6 +21,10 @@ export type PlannedRoute = {
   sidewalk_coverage: number | null;
   score: number;
   grade: "A" | "B" | "C" | "D";
+  // null when unknown — e.g. a reopened saved route, which doesn't persist
+  // sub-scores server-side (only the final grade/score).
+  elevation_subscore: number | null;
+  intersection_subscore: number | null;
   within_tolerance: boolean;
   provider: string;
 };
