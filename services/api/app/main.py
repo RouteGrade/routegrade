@@ -11,6 +11,7 @@ from app.api.routes.plans import router as plans_router
 from app.api.routes.runs import router as runs_router
 from app.api.routes.saved_routes import router as saved_routes_router
 from app.api.routes.users import router as users_router
+from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import get_settings
 from app.db.session import dispose
 
@@ -24,6 +25,13 @@ async def _lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="RouteGrade API", lifespan=_lifespan)
+
+    # Added before CORS so CORS ends up outermost and its headers are still
+    # attached to a 413 rejection (middleware wraps in reverse add order).
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.max_request_body_bytes,
+    )
 
     app.add_middleware(
         CORSMiddleware,
