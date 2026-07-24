@@ -21,9 +21,13 @@ from app.providers.geocoding import NominatimGeocoder
 from app.providers.routing import OSRMRoutingEngine
 from app.schemas.routes import (
     CustomRouteRequest,
+    NearestRequest,
+    NearestResponse,
     PlannedRoute,
     PlanRequest,
     PlanResponse,
+    SegmentRequest,
+    SegmentResponse,
 )
 from app.services.route_planner import RoutePlanner
 
@@ -175,5 +179,51 @@ def grade_custom_route(
             detail={
                 "code": "provider_error",
                 "message": "We couldn't snap that route to the map. Try drawing it again.",
+            },
+        ) from None
+
+
+@router.post(
+    "/nearest",
+    response_model=NearestResponse,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def nearest_point(
+    payload: NearestRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> NearestResponse:
+    """Snap a cursor point to the nearest routable point (assisted draw)."""
+
+    try:
+        return planner.nearest(payload.point)
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "We couldn't find a nearby path there.",
+            },
+        ) from None
+
+
+@router.post(
+    "/segment",
+    response_model=SegmentResponse,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def route_segment(
+    payload: SegmentRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> SegmentResponse:
+    """Route one drawn segment between two points (geometry + distance)."""
+
+    try:
+        return planner.route_segment(payload.start, payload.end)
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "We couldn't route between those points.",
             },
         ) from None

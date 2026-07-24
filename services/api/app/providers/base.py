@@ -53,6 +53,16 @@ class RoutingEngine(Protocol):
         self, *, latitude: float, longitude: float, distance_km: float, bearing_deg: float
     ) -> GeneratedRoute: ...
 
+    def nearest(self, lng: float, lat: float) -> list[float]:
+        """Snap a raw [lng, lat] to the nearest routable point."""
+        ...
+
+    def route_segment(
+        self, start: list[float], end: list[float]
+    ) -> tuple[list[list[float]], float]:
+        """Route one segment; returns (geometry coordinates, distance_km)."""
+        ...
+
     def snap_trace(self, coordinates: list[list[float]]) -> GeneratedRoute:
         """Snap a hand-drawn [lng, lat] trace onto the road network.
 

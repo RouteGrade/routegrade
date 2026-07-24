@@ -147,6 +147,75 @@ class OSRMRoutingEngine:
             sidewalk_coverage=None,
         )
 
+    def nearest(self, lng: float, lat: float) -> list[float]:
+        """Snap a raw [lng, lat] onto the nearest point of the routable network.
+
+        Powers intent-based cursor snapping while drawing: the user's cursor
+        needn't sit exactly on a path — OSRM's /nearest returns the closest
+        point on a routable way for the active profile.
+        """
+
+        try:
+            response = httpx.get(
+                f"{self._base_url}/nearest/v1/{self._profile}/{lng},{lat}",
+                params={"number": "1"},
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise ProviderError("routing", f"nearest request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError("routing", "non-JSON nearest response") from exc
+
+        if payload.get("code") != "Ok" or not payload.get("waypoints"):
+            raise ProviderError("routing", f"no snap: {payload.get('code', 'unknown')}")
+        try:
+            location = payload["waypoints"][0]["location"]
+            snapped = [float(location[0]), float(location[1])]
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            raise ProviderError("routing", "malformed nearest payload") from exc
+        return snapped
+
+    def route_segment(
+        self, start: list[float], end: list[float]
+    ) -> tuple[list[list[float]], float]:
+        """Route one segment between two points; returns (geometry, distance_km).
+
+        The building block of a drawn route: each committed drag sample becomes a
+        waypoint, and consecutive waypoints are joined by one of these segments.
+        Geometry-only (no maneuvers) — the full route is scored later via /custom.
+        """
+
+        coord_str = f"{start[0]},{start[1]};{end[0]},{end[1]}"
+        try:
+            response = httpx.get(
+                f"{self._base_url}/route/v1/{self._profile}/{coord_str}",
+                params={"geometries": "geojson", "overview": "full"},
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise ProviderError("routing", f"segment request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError("routing", "non-JSON segment response") from exc
+
+        if payload.get("code") != "Ok" or not payload.get("routes"):
+            raise ProviderError("routing", f"no route: {payload.get('code', 'unknown')}")
+        route = payload["routes"][0]
+        try:
+            coordinates = [
+                [float(c[0]), float(c[1])] for c in route["geometry"]["coordinates"]
+            ]
+            distance_km = float(route["distance"]) / 1000.0
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ProviderError("routing", "malformed segment payload") from exc
+
+        if len(coordinates) < 2:
+            raise ProviderError("routing", "degenerate segment geometry")
+        return coordinates, distance_km
+
     def snap_trace(self, coordinates: list[list[float]]) -> GeneratedRoute:
         points = _downsample(coordinates, _MATCH_MAX_POINTS)
         if len(points) < 2:
