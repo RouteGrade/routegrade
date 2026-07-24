@@ -37,6 +37,12 @@ type ApiStatus = "checking" | "online" | "offline";
 
 const PACE_MIN_PER_KM = 6;
 
+// Shelved 2026-07-23: the freehand "draw your own route" tool didn't work as
+// intended. Its code (route-map draw mode, lib/route-draw, /nearest, /segment)
+// is kept for the address-based multi-stop route builder that replaces it —
+// this flag hides the old entry point without deleting anything.
+const ROUTE_DRAW_ENABLED = false;
+
 // A guest who taps "Sign in to save" bounces through /login?next=/ and would
 // otherwise land back on a blank planner — the plan lives in React state, not
 // the URL. Stash it in sessionStorage on the way out and rehydrate on return,
@@ -507,7 +513,7 @@ export default function RouteExplorer({
       />
 
       {/* Draw-mode overlay: instructions → routing → name/edit/grade. */}
-      {!runMode && (drawing || draw.isRouting || draw.hasRoute) && !plan && (
+      {ROUTE_DRAW_ENABLED && !runMode && (drawing || draw.isRouting || draw.hasRoute) && !plan && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
           <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
             {drawing ? (
@@ -782,26 +788,30 @@ export default function RouteExplorer({
               </p>
             )}
 
-            <div className="flex items-center gap-3">
-              <span className="h-px flex-1 bg-white/10" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                or
-              </span>
-              <span className="h-px flex-1 bg-white/10" />
-            </div>
-            <button
-              type="button"
-              onClick={startDrawing}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                <path d="M2 2l7.586 7.586" />
-                <circle cx="11" cy="11" r="2" />
-              </svg>
-              Draw your own route
-            </button>
+            {ROUTE_DRAW_ENABLED && (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-white/10" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+                <button
+                  type="button"
+                  onClick={startDrawing}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                    <path d="M2 2l7.586 7.586" />
+                    <circle cx="11" cy="11" r="2" />
+                  </svg>
+                  Draw your own route
+                </button>
+              </>
+            )}
           </form>
         </section>
 
