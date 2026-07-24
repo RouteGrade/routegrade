@@ -10,6 +10,7 @@ import {
   remainingRouteFromDistance,
   sliceRouteAtDistance,
 } from "@/lib/geo";
+import { findRewindTarget } from "@/lib/route-draw/backtrack";
 
 const DOWNTOWN_TORONTO: [number, number] = [-79.3832, 43.6532];
 const MAP_STYLE_URL =
@@ -507,7 +508,16 @@ export default function RouteMap({
       else if (y > rect.height - EDGE_PAN_PX) dy = EDGE_PAN_STEP;
       if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { duration: 0 });
 
-      points.push(toCoord(e));
+      const coord = toCoord(e);
+      // Backtracking: if the cursor doubles back over the recent tail, rewind
+      // the path (a correction) rather than drawing over itself. Returning near
+      // an older part (a loop) isn't a backtrack, so loops keep growing.
+      const rewind = findRewindTarget(points, coord);
+      if (rewind !== null && rewind < points.length - 1) {
+        points = points.slice(0, rewind + 1);
+      } else {
+        points.push(coord);
+      }
       setData(DRAW_GUIDE_SOURCE, points);
       const now = performance.now();
       if (now - lastSnapAt >= SNAP_THROTTLE_MS) {
@@ -518,7 +528,12 @@ export default function RouteMap({
     const onUp = async () => {
       if (!active) return;
       active = false;
-      if (points.length < 2) return;
+      // Too short to route (e.g. the user backtracked almost to the start) —
+      // still tell the parent so it leaves draw mode instead of getting stuck.
+      if (points.length < 2) {
+        onDrawCompleteRef.current?.(points.slice());
+        return;
+      }
       const raw = points.slice();
       // Final snap so the committed route matches what the grade will score.
       let snapped: Coord[] | null = null;

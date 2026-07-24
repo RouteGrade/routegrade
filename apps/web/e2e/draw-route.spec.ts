@@ -89,6 +89,21 @@ async function drawStroke(page: Page): Promise<void> {
   await page.mouse.up();
 }
 
+/** Drag out and then back over the same path (backtracking / rewind). Starts
+ *  at the map's centre so the pointerdown clears the left planner card. */
+async function drawOutAndBack(page: Page): Promise<void> {
+  const canvas = page.locator("canvas.maplibregl-canvas");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("map canvas not found");
+  const cy = box.y + box.height / 2;
+  const x0 = box.x + box.width * 0.5;
+  await page.mouse.move(x0, cy);
+  await page.mouse.down();
+  for (const dx of [40, 80, 120, 160]) await page.mouse.move(x0 + dx, cy); // out
+  for (const dx of [120, 80, 40]) await page.mouse.move(x0 + dx, cy); // back over it
+  await page.mouse.up();
+}
+
 test.describe("draw your own route", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.addCookies([
@@ -135,6 +150,16 @@ test.describe("draw your own route", () => {
     await expect(
       page.getByText(/snaps to the roads as you go/),
     ).toBeVisible();
+  });
+
+  test("backtracking over the drawn tail exits draw mode cleanly", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Draw your own route" }).click();
+    await drawOutAndBack(page);
+    // The rewind must never leave the tool stuck in "Drag to draw": releasing
+    // resolves to either the name panel (route remains) or the planner (erased).
+    await expect(page.getByText(/Drag to draw/)).toHaveCount(0);
   });
 
   test("cancel leaves draw mode with no route", async ({ page }) => {
