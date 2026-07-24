@@ -75,6 +75,51 @@ class CustomRouteRequest(BaseModel):
         return v
 
 
+def _valid_position(v: list[float]) -> list[float]:
+    if len(v) != 2:
+        raise ValueError("position must be [longitude, latitude]")
+    lng, lat = v
+    if not (-180.0 <= lng <= 180.0 and -90.0 <= lat <= 90.0):
+        raise ValueError("coordinates out of range")
+    return v
+
+
+class NearestRequest(BaseModel):
+    """Body of POST /v1/routes/nearest — snap a cursor point to the network."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    point: list[float] = Field(min_length=2, max_length=2)
+
+    @field_validator("point")
+    @classmethod
+    def _check(cls, v: list[float]) -> list[float]:
+        return _valid_position(v)
+
+
+class NearestResponse(BaseModel):
+    snapped: list[float]
+
+
+class SegmentRequest(BaseModel):
+    """Body of POST /v1/routes/segment — route one drawn segment (a -> b)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: list[float] = Field(min_length=2, max_length=2)
+    end: list[float] = Field(min_length=2, max_length=2)
+
+    @field_validator("start", "end")
+    @classmethod
+    def _check(cls, v: list[float]) -> list[float]:
+        return _valid_position(v)
+
+
+class SegmentResponse(BaseModel):
+    geometry: LineStringGeometry
+    distance_km: float
+
+
 class SnapRouteRequest(BaseModel):
     """Body of POST /v1/routes/snap — snap a drawn trace to roads (no scoring).
 

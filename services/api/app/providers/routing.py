@@ -115,6 +115,49 @@ class OSRMRoutingEngine:
             raise ProviderError("routing", "trace needs at least two points")
         return self._route_waypoints(waypoints, provider="osrm-drawn")
 
+    def nearest(self, lng: float, lat: float) -> list[float]:
+        """Snap a raw [lng, lat] onto the nearest point of the routable network.
+
+        Powers intent-based cursor snapping while drawing: the user's cursor
+        needn't sit exactly on a path — OSRM's /nearest returns the closest
+        point on a routable way for the active profile.
+        """
+
+        try:
+            response = httpx.get(
+                f"{self._base_url}/nearest/v1/{self._profile}/{lng},{lat}",
+                params={"number": "1"},
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise ProviderError("routing", f"nearest request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError("routing", "non-JSON nearest response") from exc
+
+        if payload.get("code") != "Ok" or not payload.get("waypoints"):
+            raise ProviderError("routing", f"no snap: {payload.get('code', 'unknown')}")
+        try:
+            location = payload["waypoints"][0]["location"]
+            snapped = [float(location[0]), float(location[1])]
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            raise ProviderError("routing", "malformed nearest payload") from exc
+        return snapped
+
+    def route_segment(
+        self, start: list[float], end: list[float]
+    ) -> tuple[list[list[float]], float]:
+        """Route one segment between two points; returns (geometry, distance_km).
+
+        The building block of a drawn route: each committed drag sample becomes a
+        waypoint, and consecutive waypoints are joined by one of these segments.
+        Reuses _route_waypoints; the full route is scored later via /custom.
+        """
+
+        generated = self._route_waypoints([start, end], provider="osrm-segment")
+        return generated.coordinates, generated.distance_km
+
     def _route_waypoints(
         self, waypoints: list[list[float]], *, provider: str
     ) -> GeneratedRoute:

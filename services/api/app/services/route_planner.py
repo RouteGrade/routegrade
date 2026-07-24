@@ -15,9 +15,11 @@ from app.providers.base import (
 from app.providers.elevation import sample_coordinates
 from app.schemas.routes import (
     LineStringGeometry,
+    NearestResponse,
     PlannedRoute,
     PlanRequest,
     PlanResponse,
+    SegmentResponse,
     SnapRouteResponse,
     StartPoint,
 )
@@ -128,6 +130,21 @@ class RoutePlanner:
             intersection_subscore=result.intersection_subscore,
             within_tolerance=True,
             provider=generated.provider,
+        )
+
+    def nearest(self, point: list[float]) -> NearestResponse:
+        """Snap a cursor point onto the routable network (for draw snapping)."""
+
+        snapped = self._routing.nearest(point[0], point[1])
+        return NearestResponse(snapped=snapped)
+
+    def route_segment(self, start: list[float], end: list[float]) -> SegmentResponse:
+        """Route one drawn segment between two points (geometry + distance)."""
+
+        coordinates, distance_km = self._routing.route_segment(start, end)
+        return SegmentResponse(
+            geometry=LineStringGeometry(type="LineString", coordinates=coordinates),
+            distance_km=round(distance_km, 3),
         )
 
     def _resolve_start(self, request: PlanRequest) -> GeocodeResult:
