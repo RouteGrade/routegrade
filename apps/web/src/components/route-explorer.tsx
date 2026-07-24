@@ -18,6 +18,7 @@ import {
   type Preference,
 } from "@/lib/api/routes-client";
 import { deriveReasons } from "@/lib/scorecard";
+import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
 import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
@@ -172,7 +173,9 @@ export default function RouteExplorer({
   // "Create your own route": freehand draw on the map, then grade the drawn
   // path through /custom and hand the result to the normal result card.
   const [drawing, setDrawing] = useState(false);
-  const [drawnCoords, setDrawnCoords] = useState<[number, number][] | null>(null);
+  // Structured, road-snapped route the user draws (waypoints + routed segments,
+  // with undo/redo). Built from the drag on release; graded via /custom.
+  const draw = useRouteDraw();
   const [customName, setCustomName] = useState("");
   const [grading, setGrading] = useState(false);
   const [drawError, setDrawError] = useState<string | null>(null);
@@ -288,14 +291,14 @@ export default function RouteExplorer({
     [activeCoordinates],
   );
 
-  // The just-drawn (not yet graded) freehand path, shown on the map until it
-  // becomes a graded route (which then flows through `active`/`plan`).
+  // The drawn (not yet graded) route's snapped geometry, shown on the map until
+  // it becomes a graded route (which then flows through `active`/`plan`).
   const drawnGeometry: LineString | null = useMemo(
     () =>
-      drawnCoords && drawnCoords.length >= 2
-        ? { type: "LineString", coordinates: drawnCoords }
+      draw.coordinates.length >= 2
+        ? { type: "LineString", coordinates: draw.coordinates }
         : null,
-    [drawnCoords],
+    [draw.coordinates],
   );
   const mapGeometry = plan ? activeGeometry : (drawnGeometry ?? activeGeometry);
 
@@ -303,7 +306,7 @@ export default function RouteExplorer({
     setPlan(null);
     setReopened(null);
     setPlanError(null);
-    setDrawnCoords(null);
+    draw.clear();
     setDrawError(null);
     setCustomName("");
     setDrawing(true);
@@ -312,17 +315,17 @@ export default function RouteExplorer({
 
   const cancelDrawing = () => {
     setDrawing(false);
-    setDrawnCoords(null);
+    draw.clear();
     setDrawError(null);
   };
 
   const gradeDrawnRoute = async () => {
-    if (!drawnCoords || drawnCoords.length < 2) return;
+    if (draw.coordinates.length < 2) return;
     setGrading(true);
     setDrawError(null);
     try {
       const route = await gradeCustomRoute({
-        coordinates: drawnCoords,
+        coordinates: draw.coordinates,
         preference,
         name: customName.trim() || undefined,
       });
@@ -335,7 +338,7 @@ export default function RouteExplorer({
         routes: [route],
       });
       setActiveIndex(0);
-      setDrawnCoords(null);
+      draw.clear();
       setDrawing(false);
     } catch (err) {
       setDrawError(
@@ -486,7 +489,7 @@ export default function RouteExplorer({
         runner={runTelemetry}
         follow={runMode}
         center={mapCenter}
-        flat={drawing || drawnCoords !== null}
+        flat={drawing || draw.hasRoute}
         drawing={drawing}
         onSnap={async (coords) => {
           try {
@@ -497,13 +500,14 @@ export default function RouteExplorer({
           }
         }}
         onDrawComplete={(coords) => {
-          setDrawnCoords(coords);
           setDrawing(false);
+          // Turn the raw drag into a structured, road-snapped route.
+          void draw.buildFromDrag(coords);
         }}
       />
 
-      {/* Draw-mode overlay: instructions while drawing, then name + grade. */}
-      {!runMode && (drawing || drawnCoords) && !plan && (
+      {/* Draw-mode overlay: instructions → routing → name/edit/grade. */}
+      {!runMode && (drawing || draw.isRouting || draw.hasRoute) && !plan && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
           <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
             {drawing ? (
@@ -520,9 +524,30 @@ export default function RouteExplorer({
                   Cancel
                 </button>
               </div>
+            ) : draw.isRouting ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-emerald-400">
+                    <path d="M21 12a9 9 0 1 1-6.2-8.56" />
+                  </svg>
+                  Snapping your route to the roads…
+                </p>
+                <button
+                  type="button"
+                  onClick={cancelDrawing}
+                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <p className="text-sm font-semibold text-white">Name your route</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white">Name your route</p>
+                  <span className="text-xs font-medium tabular-nums text-emerald-300">
+                    {(draw.distanceMeters / 1000).toFixed(2)} km
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={customName}
@@ -534,8 +559,24 @@ export default function RouteExplorer({
                 <div className="flex gap-2">
                   <button
                     type="button"
+                    onClick={draw.undo}
+                    disabled={!draw.canUndo || grading}
+                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-40"
+                  >
+                    Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={draw.redo}
+                    disabled={!draw.canRedo || grading}
+                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-40"
+                  >
+                    Redo
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
-                      setDrawnCoords(null);
+                      draw.clear();
                       setDrawError(null);
                       setDrawing(true);
                     }}
@@ -544,15 +585,15 @@ export default function RouteExplorer({
                   >
                     Redraw
                   </button>
-                  <button
-                    type="button"
-                    onClick={gradeDrawnRoute}
-                    disabled={grading}
-                    className="h-10 flex-[1.5] rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
-                  >
-                    {grading ? "Grading…" : "Grade this route"}
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={gradeDrawnRoute}
+                  disabled={grading}
+                  className="h-10 w-full rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {grading ? "Grading…" : "Grade this route"}
+                </button>
                 <button
                   type="button"
                   onClick={cancelDrawing}
@@ -560,9 +601,10 @@ export default function RouteExplorer({
                 >
                   Cancel
                 </button>
-                {drawError && (
+                {(drawError || draw.error) && (
                   <p role="alert" className="text-center text-xs text-rose-400">
-                    {drawError}
+                    {drawError ??
+                      "We couldn't route part of that. Try redrawing along connected paths."}
                   </p>
                 )}
               </div>

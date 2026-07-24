@@ -29,6 +29,7 @@ export const initialRouteState = (): RouteState => ({
 export type RouteAction =
   | { type: "addStart"; waypoint: Waypoint }
   | { type: "addWaypoint"; waypoint: Waypoint; segment: RouteSegment }
+  | { type: "setDoc"; doc: RouteDoc }
   | { type: "removeLast" }
   | { type: "truncate"; keepThroughWaypointId: string }
   | { type: "clear" }
@@ -63,6 +64,11 @@ export function routeReducer(state: RouteState, action: RouteAction): RouteState
         waypoints: [...state.present.waypoints, action.waypoint],
         segments: [...state.present.segments, action.segment],
       });
+    }
+    case "setDoc": {
+      // Replace the whole route in one undoable step (e.g. after a drag builds
+      // a fresh set of routed segments).
+      return commit(state, action.doc);
     }
     case "removeLast": {
       const { waypoints, segments } = state.present;

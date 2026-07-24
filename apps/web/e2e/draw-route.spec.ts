@@ -42,7 +42,7 @@ async function mockCustom(page: Page): Promise<void> {
       body: JSON.stringify(CUSTOM_ROUTE),
     });
   });
-  // Live/on-release snapping calls /snap; return the on-road geometry.
+  // Live drag preview calls /snap; return the on-road geometry.
   await page.route("**/v1/routes/snap", async (route) => {
     await route.fulfill({
       status: 200,
@@ -50,6 +50,18 @@ async function mockCustom(page: Page): Promise<void> {
       body: JSON.stringify({
         geometry: CUSTOM_ROUTE.geometry,
         distance_km: CUSTOM_ROUTE.distance_km,
+      }),
+    });
+  });
+  // On release, each key-vertex pair is routed via /segment to build the
+  // structured route.
+  await page.route("**/v1/routes/segment", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        geometry: CUSTOM_ROUTE.geometry,
+        distance_km: 1.1,
       }),
     });
   });
@@ -106,6 +118,22 @@ test.describe("draw your own route", () => {
     // Guest sees the sign-in-to-save CTA (save stays gated).
     await expect(
       page.getByRole("link", { name: "Sign in to save this route" }),
+    ).toBeVisible();
+  });
+
+  test("shows editing controls after drawing; Redraw re-enters draw mode", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Draw your own route" }).click();
+    await drawStroke(page);
+    await expect(page.getByText("Name your route")).toBeVisible();
+    // The structured route exposes edit controls (undo/redo/redraw).
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Redo" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Redraw" }).click();
+    await expect(
+      page.getByText(/snaps to the roads as you go/),
     ).toBeVisible();
   });
 
