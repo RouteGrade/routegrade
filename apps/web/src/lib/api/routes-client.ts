@@ -147,6 +147,44 @@ export async function snapRoute(
   return (await res.json()) as SnapRouteResponse;
 }
 
+/** Snap a raw cursor point onto the nearest routable point. */
+export async function nearestPoint(
+  point: [number, number],
+  signal?: AbortSignal,
+): Promise<[number, number]> {
+  const res = await fetch(`${API_BASE}/v1/routes/nearest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ point }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  const { snapped } = (await res.json()) as { snapped: [number, number] };
+  return snapped;
+}
+
+export type RoutedSegment = {
+  geometry: LineStringGeometry;
+  distanceMeters: number;
+};
+
+/** Route one pedestrian segment between two points (geometry + distance). */
+export async function routeSegment(
+  start: [number, number],
+  end: [number, number],
+  signal?: AbortSignal,
+): Promise<RoutedSegment> {
+  const res = await fetch(`${API_BASE}/v1/routes/segment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start, end }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  const body = (await res.json()) as { geometry: LineStringGeometry; distance_km: number };
+  return { geometry: body.geometry, distanceMeters: body.distance_km * 1000 };
+}
+
 export async function listSavedRoutes(): Promise<SavedRoute[]> {
   const { routes } = await request<{ routes: SavedRoute[] }>("/v1/users/me/routes");
   return routes;
