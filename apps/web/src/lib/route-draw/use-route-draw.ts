@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { routeSegment, type RoutedSegment } from "@/lib/api/routes-client";
 import {
   assembleCoordinates,
   canRedo,
   canUndo,
   initialRouteState,
+  replaceWaypointSegments,
   routeReducer,
   totalDistanceMeters,
 } from "./route-state";
@@ -51,10 +52,27 @@ export function buildDoc(verts: Position[], segments: RoutedSegment[]): RouteDoc
   return { waypoints, segments: outSegments };
 }
 
+const toSegment = (
+  routed: RoutedSegment,
+  startWaypointId: string,
+  endWaypointId: string,
+): RouteSegment => ({
+  id: uid(),
+  startWaypointId,
+  endWaypointId,
+  geometry: routed.geometry,
+  distanceMeters: routed.distanceMeters,
+});
+
 export function useRouteDraw() {
   const [state, dispatch] = useReducer(routeReducer, undefined, initialRouteState);
   const abortRef = useRef<AbortController | null>(null);
   const seqRef = useRef(0);
+  // Latest committed doc, so async handlers (marker drag) read fresh state.
+  const presentRef = useRef(state.present);
+  useEffect(() => {
+    presentRef.current = state.present;
+  }, [state.present]);
 
   /**
    * Turn a raw drag path into a structured, road-snapped route: simplify to key
@@ -85,6 +103,54 @@ export function useRouteDraw() {
     }
   }, []);
 
+  /**
+   * Move an existing waypoint to a new position, re-routing only its adjacent
+   * segment(s) via /segment and committing the result in one undoable step.
+   * Endpoints have a single adjacent segment. Abort + seq-guarded like builds.
+   */
+  const moveWaypoint = useCallback(async (waypointId: string, raw: Position) => {
+    const doc = presentRef.current;
+    const index = doc.waypoints.findIndex((w) => w.id === waypointId);
+    if (index < 0) return;
+    const prev = index > 0 ? doc.waypoints[index - 1] : null;
+    const next = index < doc.waypoints.length - 1 ? doc.waypoints[index + 1] : null;
+    if (!prev && !next) return; // a lone waypoint has nothing to re-route
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++seqRef.current;
+
+    dispatch({ type: "setStatus", status: "routing" });
+    try {
+      const [inc, out] = await Promise.all([
+        prev ? routeSegment(prev.snapped, raw, controller.signal) : null,
+        next ? routeSegment(raw, next.snapped, controller.signal) : null,
+      ]);
+      if (seq !== seqRef.current) return;
+      // The dragged waypoint's snapped position is where the re-routed leg(s)
+      // meet it — the incoming leg's end, or the outgoing leg's start.
+      const incCoords = inc?.geometry.coordinates as Position[] | undefined;
+      const outCoords = out?.geometry.coordinates as Position[] | undefined;
+      const snapped: Position = incCoords
+        ? incCoords[incCoords.length - 1]
+        : outCoords
+          ? outCoords[0]
+          : raw;
+      const waypoint: Waypoint = { id: waypointId, raw, snapped };
+      const incoming = inc && prev ? toSegment(inc, prev.id, waypointId) : null;
+      const outgoing = out && next ? toSegment(out, waypointId, next.id) : null;
+      dispatch({
+        type: "setDoc",
+        doc: replaceWaypointSegments(doc, index, waypoint, incoming, outgoing),
+      });
+      dispatch({ type: "setStatus", status: "idle" });
+    } catch {
+      if (controller.signal.aborted) return;
+      dispatch({ type: "setStatus", status: "invalid" });
+    }
+  }, []);
+
   const undo = useCallback(() => dispatch({ type: "undo" }), []);
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
   const clear = useCallback(() => dispatch({ type: "clear" }), []);
@@ -94,10 +160,20 @@ export function useRouteDraw() {
     () => assembleCoordinates(state.present),
     [state.present],
   );
+  // Draggable waypoint handles, at their snapped positions.
+  const waypoints = useMemo(
+    () =>
+      state.present.waypoints.map((w) => ({
+        id: w.id,
+        lngLat: w.snapped as [number, number],
+      })),
+    [state.present],
+  );
 
   return {
     state,
     coordinates,
+    waypoints,
     distanceMeters: totalDistanceMeters(state.present),
     canUndo: canUndo(state),
     canRedo: canRedo(state),
@@ -105,6 +181,7 @@ export function useRouteDraw() {
     isRouting: state.status === "routing",
     error: state.status === "invalid",
     buildFromDrag,
+    moveWaypoint,
     undo,
     redo,
     clear,

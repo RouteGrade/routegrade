@@ -5,6 +5,7 @@ import {
   canUndo,
   endpoint,
   initialRouteState,
+  replaceWaypointSegments,
   routeReducer,
   totalDistanceMeters,
   type RouteAction,
@@ -163,6 +164,40 @@ describe("routeReducer — ephemeral state does not touch history", () => {
     const committed = routeReducer(withPreview, { type: "removeLast" });
     expect(committed.preview).toBeNull();
     expect(committed.truncation).toBeNull();
+  });
+});
+
+describe("replaceWaypointSegments (drag a waypoint)", () => {
+  it("moving a MIDDLE waypoint replaces both adjacent segments", () => {
+    const doc = buildAbcd().present; // A,B,C,D with s1,s2,s3
+    const movedB: ReturnType<typeof wp> = wp("B", [1, 0.5]);
+    const inc = seg("n1", "A", "B", [[0, 0], [1, 0.5]], 90); // A→B'
+    const out = seg("n2", "B", "C", [[1, 0.5], [2, 0]], 90); // B'→C
+    const next = replaceWaypointSegments(doc, 1, movedB, inc, out);
+
+    expect(next.waypoints[1]).toBe(movedB);
+    expect(next.segments.map((s) => s.id)).toEqual(["n1", "n2", "s3"]);
+    // Original doc is untouched (pure).
+    expect(doc.segments.map((s) => s.id)).toEqual(["s1", "s2", "s3"]);
+    expect(totalDistanceMeters(next)).toBe(90 + 90 + 100);
+  });
+
+  it("moving the FIRST waypoint replaces only the outgoing segment", () => {
+    const doc = buildAbcd().present;
+    const movedA = wp("A", [-0.5, 0]);
+    const out = seg("n1", "A", "B", [[-0.5, 0], [1, 0]], 150);
+    const next = replaceWaypointSegments(doc, 0, movedA, null, out);
+    expect(next.segments.map((s) => s.id)).toEqual(["n1", "s2", "s3"]);
+    expect(next.waypoints[0]).toBe(movedA);
+  });
+
+  it("moving the LAST waypoint replaces only the incoming segment", () => {
+    const doc = buildAbcd().present;
+    const movedD = wp("D", [3, 0.5]);
+    const inc = seg("n3", "C", "D", [[2, 0], [3, 0.5]], 140);
+    const next = replaceWaypointSegments(doc, 3, movedD, inc, null);
+    expect(next.segments.map((s) => s.id)).toEqual(["s1", "s2", "n3"]);
+    expect(next.waypoints[3]).toBe(movedD);
   });
 });
 

@@ -164,6 +164,10 @@ export type RouteMapProps = {
   center?: [number, number] | null;
   /** Flatten to a top-down, zoomed-in view — used while drawing a route. */
   flat?: boolean;
+  /** Draggable waypoint handles for editing a drawn route (empty to hide). */
+  waypoints?: Array<{ id: string; lngLat: [number, number] }>;
+  /** Fires with a waypoint's new position when its handle is dragged. */
+  onWaypointMove?: (id: string, lngLat: [number, number]) => void;
 };
 
 export default function RouteMap({
@@ -175,6 +179,8 @@ export default function RouteMap({
   onSnap,
   center = null,
   flat = false,
+  waypoints = [],
+  onWaypointMove,
 }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -189,10 +195,55 @@ export default function RouteMap({
   // Latest draw callbacks, read from the handlers without re-binding them.
   const onDrawCompleteRef = useRef(onDrawComplete);
   const onSnapRef = useRef(onSnap);
+  const onWaypointMoveRef = useRef(onWaypointMove);
   useEffect(() => {
     onDrawCompleteRef.current = onDrawComplete;
     onSnapRef.current = onSnap;
-  }, [onDrawComplete, onSnap]);
+    onWaypointMoveRef.current = onWaypointMove;
+  }, [onDrawComplete, onSnap, onWaypointMove]);
+  const waypointMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+
+  // Draggable waypoint handles for editing a drawn route. Sync markers to the
+  // `waypoints` prop: add new ones, move existing, remove gone.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = waypointMarkersRef.current;
+    const wanted = new Set(waypoints.map((w) => w.id));
+    for (const [id, marker] of markers) {
+      if (!wanted.has(id)) {
+        marker.remove();
+        markers.delete(id);
+      }
+    }
+    for (const wp of waypoints) {
+      const existing = markers.get(wp.id);
+      if (existing) {
+        existing.setLngLat(wp.lngLat);
+        continue;
+      }
+      const el = document.createElement("div");
+      el.className =
+        "h-3.5 w-3.5 cursor-grab rounded-full border-2 border-white bg-pink-500 shadow-md active:cursor-grabbing";
+      const marker = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat(wp.lngLat)
+        .addTo(map);
+      marker.on("dragend", () => {
+        const { lng, lat } = marker.getLngLat();
+        onWaypointMoveRef.current?.(wp.id, [lng, lat]);
+      });
+      markers.set(wp.id, marker);
+    }
+  }, [waypoints]);
+
+  // Remove all waypoint markers on unmount.
+  useEffect(() => {
+    const markers = waypointMarkersRef.current;
+    return () => {
+      for (const marker of markers.values()) marker.remove();
+      markers.clear();
+    };
+  }, []);
 
   // Recenter on a new location (e.g. the runner's current position after login).
   const appliedCenterRef = useRef<[number, number] | null>(null);
