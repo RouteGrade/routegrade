@@ -63,6 +63,12 @@ class RoutingEngine(Protocol):
         """Route one segment; returns (geometry coordinates, distance_km)."""
         ...
 
+    def route_alternatives(
+        self, start: list[float], end: list[float]
+    ) -> list[tuple[list[list[float]], float]]:
+        """Several route options between two points [(geometry, distance_km)]."""
+        ...
+
     def snap_trace(self, coordinates: list[list[float]]) -> GeneratedRoute:
         """Snap a hand-drawn [lng, lat] trace onto the road network.
 
