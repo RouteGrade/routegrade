@@ -12,6 +12,7 @@ import {
   gradeCustomRoute,
   planRoute,
   saveRoute,
+  snapRoute,
   type PlanResponse,
   type PlannedRoute,
   type Preference,
@@ -152,6 +153,8 @@ export default function RouteExplorer({
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [address, setAddress] = useState("");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  // Where to point the map camera — set to the runner's location on first load.
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [distanceKm, setDistanceKm] = useState(5);
   const [preference, setPreference] = useState<Preference>("quiet");
   const [searching, setSearching] = useState(false);
@@ -345,26 +348,47 @@ export default function RouteExplorer({
     }
   };
 
-  const handleUseMyLocation = () => {
+  const locateUser = (opts?: { silent?: boolean }) => {
     if (!("geolocation" in navigator)) {
-      setPlanError("Location is unavailable in this browser.");
+      if (!opts?.silent) setPlanError("Location is unavailable in this browser.");
       return;
     }
-    setLocating(true);
+    if (!opts?.silent) setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         setCoords({ latitude, longitude });
         setAddress(`Current location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+        setMapCenter([longitude, latitude]);
         setLocating(false);
       },
       () => {
-        setPlanError("We couldn't read your location. Type an address instead.");
+        if (!opts?.silent) {
+          setPlanError("We couldn't read your location. Type an address instead.");
+        }
         setLocating(false);
       },
       { timeout: 8000 },
     );
   };
+
+  const handleUseMyLocation = () => locateUser();
+
+  // First landing (after the login/entry gate): snap the map to the runner's
+  // current location. Skips a deep-linked saved route and a restored guest plan
+  // so it never overrides an already-chosen start.
+  useEffect(() => {
+    if (savedRouteId) return;
+    try {
+      if (sessionStorage.getItem(GUEST_PLAN_STASH_KEY)) return;
+    } catch {
+      // sessionStorage unavailable — fine, just locate.
+    }
+    // Deferred so the effect body stays setState-free (locateUser sets state).
+    const timer = setTimeout(() => locateUser({ silent: true }), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFindRoutes = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -461,7 +485,17 @@ export default function RouteExplorer({
         geometry={mapGeometry}
         runner={runTelemetry}
         follow={runMode}
+        center={mapCenter}
+        flat={drawing || drawnCoords !== null}
         drawing={drawing}
+        onSnap={async (coords) => {
+          try {
+            const { geometry } = await snapRoute(coords);
+            return geometry.coordinates;
+          } catch {
+            return null;
+          }
+        }}
         onDrawComplete={(coords) => {
           setDrawnCoords(coords);
           setDrawing(false);
@@ -476,7 +510,7 @@ export default function RouteExplorer({
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-zinc-200">
                   <span className="mr-1.5 text-pink-400">✎</span>
-                  Press and drag on the map to draw your route.
+                  Drag to draw — your route snaps to the roads as you go.
                 </p>
                 <button
                   type="button"

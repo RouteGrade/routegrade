@@ -20,6 +20,7 @@ from app.schemas.routes import (
     PlanRequest,
     PlanResponse,
     SegmentResponse,
+    SnapRouteResponse,
     StartPoint,
 )
 from app.services import scoring
@@ -74,6 +75,22 @@ class RoutePlanner:
             preference=request.preference,
             distance_tolerance=self._tolerance,
             routes=candidates,
+        )
+
+    def snap(self, coordinates: list[list[float]]) -> SnapRouteResponse:
+        """Snap a drawn trace to roads and return just the on-road geometry.
+
+        Lightweight companion to grade_drawn (no elevation/scoring round-trip)
+        so live assisted drawing can snap on every stroke without the latency
+        of a full grade.
+        """
+
+        generated = self._routing.snap_trace(coordinates)
+        return SnapRouteResponse(
+            geometry=LineStringGeometry(
+                type="LineString", coordinates=generated.coordinates
+            ),
+            distance_km=round(generated.distance_km, 2),
         )
 
     def grade_drawn(

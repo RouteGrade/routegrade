@@ -42,6 +42,17 @@ async function mockCustom(page: Page): Promise<void> {
       body: JSON.stringify(CUSTOM_ROUTE),
     });
   });
+  // Live/on-release snapping calls /snap; return the on-road geometry.
+  await page.route("**/v1/routes/snap", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        geometry: CUSTOM_ROUTE.geometry,
+        distance_km: CUSTOM_ROUTE.distance_km,
+      }),
+    });
+  });
   await page.route("**/api/health", (route) =>
     route.fulfill({
       status: 200,
@@ -79,7 +90,7 @@ test.describe("draw your own route", () => {
   test("draw, name, and grade a custom route", async ({ page }) => {
     await page.getByRole("button", { name: "Draw your own route" }).click();
     await expect(
-      page.getByText(/Press and drag on the map to draw your route/),
+      page.getByText(/your route snaps to the roads as you go/),
     ).toBeVisible();
 
     await drawStroke(page);
@@ -102,7 +113,7 @@ test.describe("draw your own route", () => {
     await page.getByRole("button", { name: "Draw your own route" }).click();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(
-      page.getByText(/Press and drag on the map/),
+      page.getByText(/snaps to the roads as you go/),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Start run" })).toHaveCount(0);
   });

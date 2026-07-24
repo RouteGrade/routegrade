@@ -34,9 +34,16 @@ const ROUTE_ARROWS_SOURCE = "route-direction-source";
 const ROUTE_LAYERS = ["route-glow", "route-line", ROUTE_ARROWS_LAYER] as const;
 const TRAVELED_SOURCE = "run-traveled";
 const TRAVELED_LAYER = "run-traveled-line";
-// The in-progress freehand line the user draws in "create your own route" mode.
+// "Create your own route" draw mode: DRAW is the snapped, on-road line;
+// DRAW_GUIDE is the faint raw finger/mouse trail behind it while snapping.
 const DRAW_SOURCE = "draw-route";
 const DRAW_LAYER = "draw-route-line";
+const DRAW_GUIDE_SOURCE = "draw-guide";
+const DRAW_GUIDE_LAYER = "draw-guide-line";
+// Edge-pan while drawing: within this many px of a map edge, the camera scrolls
+// so the route can extend past the current viewport without lifting the finger.
+const EDGE_PAN_PX = 70;
+const EDGE_PAN_STEP = 9;
 // Camera-follow zoom while running; gentle enough to keep context visible.
 const FOLLOW_ZOOM = 15.5;
 
@@ -144,8 +151,18 @@ export type RouteMapProps = {
   follow?: boolean;
   /** When true, the map enters freehand draw mode (pan disabled). */
   drawing?: boolean;
-  /** Fires with the drawn [lng, lat] path when a freehand stroke finishes. */
+  /** Fires with the final (snapped, if available) path when a stroke finishes. */
   onDrawComplete?: (coordinates: Coord[]) => void;
+  /**
+   * Snap a raw drawn trace onto roads. Called (throttled) while drawing to show
+   * the line following the road network, and once more on release. Returns the
+   * snapped coords, or null if snapping failed (the raw trace is kept).
+   */
+  onSnap?: (coordinates: Coord[]) => Promise<Coord[] | null>;
+  /** Recenter the map here (e.g. the runner's current location) when it changes. */
+  center?: [number, number] | null;
+  /** Flatten to a top-down, zoomed-in view — used while drawing a route. */
+  flat?: boolean;
 };
 
 export default function RouteMap({
@@ -154,6 +171,9 @@ export default function RouteMap({
   follow = false,
   drawing = false,
   onDrawComplete,
+  onSnap,
+  center = null,
+  flat = false,
 }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -165,11 +185,53 @@ export default function RouteMap({
   const [followSuspended, setFollowSuspended] = useState(false);
   const [prevFollow, setPrevFollow] = useState(follow);
   const styleReadyRef = useRef(false);
-  // Latest onDrawComplete, read from the draw handlers without re-binding them.
+  // Latest draw callbacks, read from the handlers without re-binding them.
   const onDrawCompleteRef = useRef(onDrawComplete);
+  const onSnapRef = useRef(onSnap);
   useEffect(() => {
     onDrawCompleteRef.current = onDrawComplete;
-  }, [onDrawComplete]);
+    onSnapRef.current = onSnap;
+  }, [onDrawComplete, onSnap]);
+
+  // Recenter on a new location (e.g. the runner's current position after login).
+  const appliedCenterRef = useRef<[number, number] | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !center) return;
+    const prev = appliedCenterRef.current;
+    if (prev && prev[0] === center[0] && prev[1] === center[1]) return;
+    appliedCenterRef.current = center;
+    const apply = () =>
+      map.easeTo({ center, zoom: Math.max(map.getZoom(), 15), duration: 1200 });
+    if (styleReadyRef.current) apply();
+    else map.once("routegrade:ready", apply);
+  }, [center]);
+
+  // Flatten to a top-down, zoomed-in view while drawing (easier to draw on than
+  // the tilted 3D default); restore the 3D view when done. Tracks the previous
+  // value so it acts only on real changes — never on the initial 3D load, and
+  // (unlike a mount flag) never mis-fires when the map isn't ready on mount.
+  const prevFlatRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const prev = prevFlatRef.current;
+    if (prev === flat) return;
+    const isFirst = prev === null;
+    prevFlatRef.current = flat;
+    if (isFirst && !flat) return; // initial load is already 3D — nothing to do
+    const apply = () =>
+      flat
+        ? map.easeTo({
+            pitch: 0,
+            bearing: 0,
+            zoom: Math.max(map.getZoom(), 16),
+            duration: 600,
+          })
+        : map.easeTo({ pitch: 45, bearing: -17, duration: 600 });
+    if (styleReadyRef.current) apply();
+    else map.once("routegrade:ready", apply);
+  }, [flat]);
 
   // Render-phase adjustment: a fresh run always starts with follow engaged.
   if (follow !== prevFollow) {
@@ -287,8 +349,24 @@ export default function RouteMap({
           "line-opacity": 0.9,
         },
       });
-      // Freehand draw-mode line — bright and on top so the stroke reads
-      // clearly against any basemap while the user is drawing.
+      // Draw-mode: a faint raw finger trail (guide) under the bright snapped
+      // on-road line, so the user sees their drawing follow the streets.
+      map.addSource(DRAW_GUIDE_SOURCE, {
+        type: "geojson",
+        data: lineStringData([]),
+      });
+      map.addLayer({
+        id: DRAW_GUIDE_LAYER,
+        type: "line",
+        source: DRAW_GUIDE_SOURCE,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#f472b6",
+          "line-width": 3,
+          "line-opacity": 0.4,
+          "line-dasharray": [1.5, 1.5],
+        },
+      });
       map.addSource(DRAW_SOURCE, {
         type: "geojson",
         data: lineStringData([]),
@@ -361,13 +439,13 @@ export default function RouteMap({
     if (!map || !drawing) return;
 
     const canvas = map.getCanvas();
-    const setDrawData = (coords: Coord[]) => {
-      // Read the live map and tolerate a torn-down style (getSource throws once
-      // the map is removed) — the draw source only exists after style load.
+    // Update a draw source, tolerating a torn-down style (getSource throws once
+    // the map is removed) — draw sources only exist after style load.
+    const setData = (sourceId: string, coords: Coord[]) => {
       const m = mapRef.current;
       if (!m) return;
       try {
-        const src = m.getSource(DRAW_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        const src = m.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
         src?.setData(lineStringData(coords));
       } catch {
         // map mid-teardown; nothing to draw.
@@ -376,6 +454,9 @@ export default function RouteMap({
 
     let points: Coord[] = [];
     let active = false;
+    let snapSeq = 0;
+    let lastSnapAt = 0;
+    const SNAP_THROTTLE_MS = 220;
 
     const toCoord = (e: PointerEvent): Coord => {
       const rect = canvas.getBoundingClientRect();
@@ -383,11 +464,27 @@ export default function RouteMap({
       return [lngLat.lng, lngLat.lat];
     };
 
+    // Snap the current trace onto roads and paint the result on DRAW_SOURCE.
+    // Sequence-guarded so a slower earlier response can't overwrite a newer one.
+    const requestSnap = (trace: Coord[]) => {
+      const snap = onSnapRef.current;
+      if (!snap || trace.length < 2) return;
+      const seq = ++snapSeq;
+      snap(trace.slice())
+        .then((snapped) => {
+          if (seq === snapSeq && snapped && snapped.length >= 2) {
+            setData(DRAW_SOURCE, snapped);
+          }
+        })
+        .catch(() => {});
+    };
+
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0 && e.pointerType === "mouse") return;
       active = true;
       points = [toCoord(e)];
-      setDrawData(points);
+      setData(DRAW_GUIDE_SOURCE, points);
+      setData(DRAW_SOURCE, []);
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch {
@@ -397,13 +494,41 @@ export default function RouteMap({
     };
     const onMove = (e: PointerEvent) => {
       if (!active) return;
+      // Pan the map when the pointer nears an edge, so a route can be drawn
+      // past the current viewport without lifting the finger.
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      let dx = 0;
+      let dy = 0;
+      if (x < EDGE_PAN_PX) dx = -EDGE_PAN_STEP;
+      else if (x > rect.width - EDGE_PAN_PX) dx = EDGE_PAN_STEP;
+      if (y < EDGE_PAN_PX) dy = -EDGE_PAN_STEP;
+      else if (y > rect.height - EDGE_PAN_PX) dy = EDGE_PAN_STEP;
+      if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { duration: 0 });
+
       points.push(toCoord(e));
-      setDrawData(points);
+      setData(DRAW_GUIDE_SOURCE, points);
+      const now = performance.now();
+      if (now - lastSnapAt >= SNAP_THROTTLE_MS) {
+        lastSnapAt = now;
+        requestSnap(points);
+      }
     };
-    const onUp = () => {
+    const onUp = async () => {
       if (!active) return;
       active = false;
-      if (points.length >= 2) onDrawCompleteRef.current?.(points);
+      if (points.length < 2) return;
+      const raw = points.slice();
+      // Final snap so the committed route matches what the grade will score.
+      let snapped: Coord[] | null = null;
+      try {
+        snapped = (await onSnapRef.current?.(raw)) ?? null;
+      } catch {
+        snapped = null;
+      }
+      if (snapped && snapped.length >= 2) setData(DRAW_SOURCE, snapped);
+      onDrawCompleteRef.current?.(snapped ?? raw);
     };
 
     map.dragPan.disable();
@@ -423,7 +548,8 @@ export default function RouteMap({
       canvas.removeEventListener("pointercancel", onUp);
       canvas.style.cursor = "";
       canvas.style.touchAction = "";
-      setDrawData([]);
+      setData(DRAW_SOURCE, []);
+      setData(DRAW_GUIDE_SOURCE, []);
       // Re-enable gestures only if the map is still alive (not mid-teardown).
       if (mapRef.current) {
         try {

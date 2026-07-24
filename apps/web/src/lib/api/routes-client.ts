@@ -116,6 +116,37 @@ export async function gradeCustomRoute(
   return (await res.json()) as PlannedRoute;
 }
 
+export type SnapRouteResponse = {
+  geometry: LineStringGeometry;
+  distance_km: number;
+};
+
+/**
+ * Snap a drawn trace onto roads (geometry only, no grade). Fast enough to call
+ * repeatedly while the user draws, for live assisted snapping.
+ */
+export async function snapRoute(
+  coordinates: [number, number][],
+): Promise<SnapRouteResponse> {
+  const res = await fetch(`${API_BASE}/v1/routes/snap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coordinates }),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const payload = await res.json();
+      if (payload?.detail?.message) detail = payload.detail.message;
+      else if (typeof payload?.detail === "string") detail = payload.detail;
+    } catch {
+      // ignore body parse
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as SnapRouteResponse;
+}
+
 export async function listSavedRoutes(): Promise<SavedRoute[]> {
   const { routes } = await request<{ routes: SavedRoute[] }>("/v1/users/me/routes");
   return routes;

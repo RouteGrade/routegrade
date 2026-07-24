@@ -120,6 +120,34 @@ class SegmentResponse(BaseModel):
     distance_km: float
 
 
+class SnapRouteRequest(BaseModel):
+    """Body of POST /v1/routes/snap — snap a drawn trace to roads (no scoring).
+
+    Used for live assisted drawing: as the user draws, the raw trace is snapped
+    onto the road network and the on-road geometry is returned for rendering.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    coordinates: list[list[float]] = Field(min_length=2, max_length=5000)
+
+    @field_validator("coordinates")
+    @classmethod
+    def _validate_positions(cls, v: list[list[float]]) -> list[list[float]]:
+        for position in v:
+            if len(position) != 2:
+                raise ValueError("each position must be [longitude, latitude]")
+            lng, lat = position
+            if not (-180.0 <= lng <= 180.0 and -90.0 <= lat <= 90.0):
+                raise ValueError("coordinates out of range")
+        return v
+
+
+class SnapRouteResponse(BaseModel):
+    geometry: LineStringGeometry
+    distance_km: float
+
+
 class StartPoint(BaseModel):
     latitude: float
     longitude: float
