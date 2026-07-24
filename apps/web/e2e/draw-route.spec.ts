@@ -162,6 +162,30 @@ test.describe("draw your own route", () => {
     await expect(page.getByText(/Drag to draw/)).toHaveCount(0);
   });
 
+  test("draggable waypoint handles appear and re-route on drag", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Draw your own route" }).click();
+    await drawStroke(page);
+    await expect(page.getByText("Name your route")).toBeVisible();
+
+    const markers = page.locator(".maplibregl-marker");
+    await expect(markers.first()).toBeVisible();
+
+    // Drag the first waypoint handle; /segment re-routes its adjacent leg(s)
+    // and the route stays intact.
+    const box = await markers.first().boundingBox();
+    if (!box) throw new Error("no waypoint marker");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 50, box.y + 30);
+    await page.mouse.move(box.x + 70, box.y + 50);
+    await page.mouse.up();
+
+    await expect(page.getByText("Name your route")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Grade this route" })).toBeVisible();
+  });
+
   test("cancel leaves draw mode with no route", async ({ page }) => {
     await page.getByRole("button", { name: "Draw your own route" }).click();
     await page.getByRole("button", { name: "Cancel" }).click();

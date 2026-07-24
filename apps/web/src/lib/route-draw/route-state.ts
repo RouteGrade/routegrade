@@ -159,6 +159,28 @@ export function totalDistanceMeters(doc: RouteDoc): number {
 }
 
 /**
+ * Return a new doc with waypoint `index` moved and its adjacent segments
+ * replaced (the re-routed incoming and/or outgoing legs). Pure — the caller
+ * routes the new legs, this just swaps them in. Endpoints have only one
+ * adjacent segment, so `incoming`/`outgoing` are null there.
+ */
+export function replaceWaypointSegments(
+  doc: RouteDoc,
+  index: number,
+  waypoint: Waypoint,
+  incoming: RouteSegment | null,
+  outgoing: RouteSegment | null,
+): RouteDoc {
+  const waypoints = doc.waypoints.slice();
+  waypoints[index] = waypoint;
+  const segments = doc.segments.slice();
+  // segments[i] joins waypoints[i] → waypoints[i+1].
+  if (index > 0 && incoming) segments[index - 1] = incoming;
+  if (index < doc.waypoints.length - 1 && outgoing) segments[index] = outgoing;
+  return { waypoints, segments };
+}
+
+/**
  * Flatten the committed segments into one coordinate list, dropping the shared
  * point at each join so there are no duplicates. Returns [] for a route with no
  * segments (a lone start point isn't a routable line).

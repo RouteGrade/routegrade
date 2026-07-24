@@ -491,6 +491,8 @@ export default function RouteExplorer({
         center={mapCenter}
         flat={drawing || draw.hasRoute}
         drawing={drawing}
+        waypoints={!drawing && !plan && draw.hasRoute ? draw.waypoints : []}
+        onWaypointMove={(id, lngLat) => draw.moveWaypoint(id, lngLat)}
         onSnap={async (coords) => {
           try {
             const { geometry } = await snapRoute(coords);
@@ -548,6 +550,9 @@ export default function RouteExplorer({
                     {(draw.distanceMeters / 1000).toFixed(2)} km
                   </span>
                 </div>
+                <p className="-mt-1 text-[11px] text-zinc-500">
+                  Drag the pink dots on the map to fine-tune the route.
+                </p>
                 <input
                   type="text"
                   value={customName}
