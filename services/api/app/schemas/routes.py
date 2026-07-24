@@ -120,6 +120,43 @@ class SegmentResponse(BaseModel):
     distance_km: float
 
 
+class GeocodeRequest(BaseModel):
+    """Body of POST /v1/geocode — resolve an address to a point."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str = Field(min_length=1, max_length=300)
+
+
+class GeocodeResponse(BaseModel):
+    latitude: float
+    longitude: float
+    label: str
+
+
+class AlternativesRequest(BaseModel):
+    """Body of POST /v1/routes/alternatives — route options between two points."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: list[float] = Field(min_length=2, max_length=2)
+    end: list[float] = Field(min_length=2, max_length=2)
+
+    @field_validator("start", "end")
+    @classmethod
+    def _check(cls, v: list[float]) -> list[float]:
+        return _valid_position(v)
+
+
+class RouteOption(BaseModel):
+    geometry: LineStringGeometry
+    distance_km: float
+
+
+class AlternativesResponse(BaseModel):
+    routes: list[RouteOption]
+
+
 class SnapRouteRequest(BaseModel):
     """Body of POST /v1/routes/snap — snap a drawn trace to roads (no scoring).
 

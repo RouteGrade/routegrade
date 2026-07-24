@@ -158,6 +158,53 @@ class OSRMRoutingEngine:
         generated = self._route_waypoints([start, end], provider="osrm-segment")
         return generated.coordinates, generated.distance_km
 
+    def route_alternatives(
+        self, start: list[float], end: list[float]
+    ) -> list[tuple[list[list[float]], float]]:
+        """Return several route options between two points (geometry, distance_km).
+
+        Backs loop mode: the closing leg back to the start is chosen from these
+        alternatives to overlap least with the streets already used. OSRM can't
+        strictly avoid edges, so this is a best-effort set of distinct paths.
+        """
+
+        coord_str = f"{start[0]},{start[1]};{end[0]},{end[1]}"
+        try:
+            response = httpx.get(
+                f"{self._base_url}/route/v1/{self._profile}/{coord_str}",
+                params={
+                    "geometries": "geojson",
+                    "overview": "full",
+                    "alternatives": "3",
+                },
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise ProviderError("routing", f"request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError("routing", "non-JSON response") from exc
+
+        if payload.get("code") != "Ok" or not payload.get("routes"):
+            raise ProviderError("routing", f"no route: {payload.get('code', 'unknown')}")
+
+        out: list[tuple[list[list[float]], float]] = []
+        for route in payload["routes"]:
+            try:
+                coords = [
+                    [float(c[0]), float(c[1])]
+                    for c in route["geometry"]["coordinates"]
+                ]
+                distance_km = float(route["distance"]) / 1000.0
+            except (KeyError, TypeError, ValueError):
+                continue
+            if len(coords) >= 2:
+                out.append((coords, distance_km))
+        if not out:
+            raise ProviderError("routing", "no usable alternative geometry")
+        return out
+
     def _route_waypoints(
         self, waypoints: list[list[float]], *, provider: str
     ) -> GeneratedRoute:

@@ -8,6 +8,7 @@ import {
   ApiError,
 } from "@/lib/api/authenticated-client";
 import {
+  geocodeAddress,
   getSavedRoute,
   gradeCustomRoute,
   planRoute,
@@ -36,6 +37,12 @@ const RouteMap = dynamic(() => import("./route-map"), {
 type ApiStatus = "checking" | "online" | "offline";
 
 const PACE_MIN_PER_KM = 6;
+
+// Shelved 2026-07-23: the freehand "draw your own route" tool didn't work as
+// intended. Its code (route-map draw mode, lib/route-draw, /nearest, /segment)
+// is kept for the address-based multi-stop route builder that replaces it —
+// this flag hides the old entry point without deleting anything.
+const ROUTE_DRAW_ENABLED = false;
 
 // A guest who taps "Sign in to save" bounces through /login?next=/ and would
 // otherwise land back on a blank planner — the plan lives in React state, not
@@ -170,15 +177,24 @@ export default function RouteExplorer({
   // Mobile-only: the planner form collapses into a bottom-sheet header so the
   // map stays visible. Ignored on sm+ where the form is always shown.
   const [formOpen, setFormOpen] = useState(true);
-  // "Create your own route": freehand draw on the map, then grade the drawn
-  // path through /custom and hand the result to the normal result card.
+  // Shelved freehand draw mode (behind ROUTE_DRAW_ENABLED). The structured
+  // route state (waypoints + segments, undo/redo, draggable markers) is reused
+  // by the address-based multi-stop builder below.
   const [drawing, setDrawing] = useState(false);
-  // Structured, road-snapped route the user draws (waypoints + routed segments,
-  // with undo/redo). Built from the drag on release; graded via /custom.
   const draw = useRouteDraw();
   const [customName, setCustomName] = useState("");
   const [grading, setGrading] = useState(false);
   const [drawError, setDrawError] = useState<string | null>(null);
+
+  // "Create your own route": enter start/end (+ stops), we route through them
+  // (optionally as a loop), then the user adjusts + grades + saves.
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [startAddr, setStartAddr] = useState("");
+  const [endAddr, setEndAddr] = useState("");
+  const [stops, setStops] = useState<string[]>([]);
+  const [loopMode, setLoopMode] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [builderError, setBuilderError] = useState<string | null>(null);
   // Live run mode: the planner UI hides and RunTracker takes over the screen.
   const [runMode, setRunMode] = useState(false);
   const [runTelemetry, setRunTelemetry] = useState<RunTelemetry | null>(null);
@@ -315,8 +331,55 @@ export default function RouteExplorer({
 
   const cancelDrawing = () => {
     setDrawing(false);
+    setBuilderOpen(false);
     draw.clear();
     setDrawError(null);
+  };
+
+  const openBuilder = () => {
+    setPlan(null);
+    setReopened(null);
+    setPlanError(null);
+    draw.clear();
+    setDrawError(null);
+    setBuilderError(null);
+    setCustomName("");
+    setBuilderOpen(true);
+    if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
+  };
+
+  const addStop = () => setStops((s) => [...s, ""]);
+  const removeStop = (i: number) =>
+    setStops((s) => s.filter((_, idx) => idx !== i));
+  const setStop = (i: number, value: string) =>
+    setStops((s) => s.map((v, idx) => (idx === i ? value : v)));
+
+  const buildAddressRoute = async () => {
+    const addresses = [startAddr, ...stops, endAddr]
+      .map((a) => a.trim())
+      .filter(Boolean);
+    if (addresses.length < 2) {
+      setBuilderError("Enter at least a start and an end.");
+      return;
+    }
+    setBuilding(true);
+    setBuilderError(null);
+    try {
+      const results = await Promise.all(addresses.map((a) => geocodeAddress(a)));
+      const points = results.map(
+        (r) => [r.longitude, r.latitude] as [number, number],
+      );
+      setMapCenter(points[0]);
+      await draw.buildFromWaypoints(points, loopMode);
+    } catch (err) {
+      setBuilderError(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't build a route through those points.",
+      );
+    } finally {
+      setBuilding(false);
+    }
   };
 
   const gradeDrawnRoute = async () => {
@@ -489,7 +552,7 @@ export default function RouteExplorer({
         runner={runTelemetry}
         follow={runMode}
         center={mapCenter}
-        flat={drawing || draw.hasRoute}
+        flat={drawing || draw.hasRoute || draw.isRouting}
         drawing={drawing}
         waypoints={!drawing && !plan && draw.hasRoute ? draw.waypoints : []}
         onWaypointMove={(id, lngLat) => draw.moveWaypoint(id, lngLat)}
@@ -508,8 +571,110 @@ export default function RouteExplorer({
         }}
       />
 
-      {/* Draw-mode overlay: instructions → routing → name/edit/grade. */}
-      {!runMode && (drawing || draw.isRouting || draw.hasRoute) && !plan && (
+      {/* Address builder: start / stops / end + loop, routed through the points. */}
+      {builderOpen && !draw.hasRoute && !draw.isRouting && !plan && !runMode && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+          <div className="pointer-events-auto flex w-full max-w-md flex-col gap-2.5 rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">Create your own route</p>
+              <button
+                type="button"
+                onClick={cancelDrawing}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/10"
+              >
+                Cancel
+              </button>
+            </div>
+            <input
+              type="text"
+              value={startAddr}
+              onChange={(e) => setStartAddr(e.target.value)}
+              placeholder="Start address"
+              className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-400/50 focus:outline-none"
+            />
+            {stops.map((stop, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  type="text"
+                  value={stop}
+                  onChange={(e) => setStop(i, e.target.value)}
+                  placeholder={`Stop ${i + 1}`}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-400/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeStop(i)}
+                  aria-label={`Remove stop ${i + 1}`}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-rose-300"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <input
+              type="text"
+              value={endAddr}
+              onChange={(e) => setEndAddr(e.target.value)}
+              placeholder="End address"
+              className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-400/50 focus:outline-none"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={addStop}
+                className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 transition hover:text-emerald-200"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-3.5 w-3.5">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add stop
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoopMode((v) => !v)}
+                aria-pressed={loopMode}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
+                  loopMode
+                    ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300"
+                    : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+                }`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                  <path d="M17 2l4 4-4 4" />
+                  <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+                  <path d="M7 22l-4-4 4-4" />
+                  <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+                </svg>
+                Loop
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={buildAddressRoute}
+              disabled={building}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+            >
+              {building ? "Building…" : "Build route"}
+            </button>
+            {loopMode && (
+              <p className="text-center text-[11px] text-zinc-500">
+                Loop returns to your start, avoiding retracing where it can.
+              </p>
+            )}
+            {builderError && (
+              <p role="alert" className="text-center text-xs text-rose-400">
+                {builderError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Route-ready overlay: routing → name/edit/grade. Shared by the shelved
+          draw tool and the address builder (both produce the structured route). */}
+      {!runMode && !plan && ((ROUTE_DRAW_ENABLED && drawing) || draw.isRouting || draw.hasRoute) && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
           <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
             {drawing ? (
@@ -532,7 +697,7 @@ export default function RouteExplorer({
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-emerald-400">
                     <path d="M21 12a9 9 0 1 1-6.2-8.56" />
                   </svg>
-                  Snapping your route to the roads…
+                  Building your route…
                 </p>
                 <button
                   type="button"
@@ -583,12 +748,13 @@ export default function RouteExplorer({
                     onClick={() => {
                       draw.clear();
                       setDrawError(null);
-                      setDrawing(true);
+                      if (ROUTE_DRAW_ENABLED && drawing) setDrawing(true);
+                      else setBuilderOpen(true);
                     }}
                     disabled={grading}
                     className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-60"
                   >
-                    Redraw
+                    Edit
                   </button>
                 </div>
                 <button
@@ -787,6 +953,31 @@ export default function RouteExplorer({
               </p>
             )}
 
+            {ROUTE_DRAW_ENABLED && (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-white/10" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                    or
+                  </span>
+                  <span className="h-px flex-1 bg-white/10" />
+                </div>
+                <button
+                  type="button"
+                  onClick={startDrawing}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                    <path d="M2 2l7.586 7.586" />
+                    <circle cx="11" cy="11" r="2" />
+                  </svg>
+                  Draw your own route
+                </button>
+              </>
+            )}
+
             <div className="flex items-center gap-3">
               <span className="h-px flex-1 bg-white/10" />
               <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
@@ -796,16 +987,14 @@ export default function RouteExplorer({
             </div>
             <button
               type="button"
-              onClick={startDrawing}
+              onClick={openBuilder}
               className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                <path d="M2 2l7.586 7.586" />
-                <circle cx="11" cy="11" r="2" />
+                <circle cx="12" cy="10" r="3" />
+                <path d="M12 2a8 8 0 0 0-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8z" />
               </svg>
-              Draw your own route
+              Create your own route
             </button>
           </form>
         </section>
