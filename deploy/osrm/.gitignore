@@ -1,0 +1,4 @@
+# Host-only artifacts — the extract and processed OSRM graph (several GB).
+/data/
+# Real config with the chosen region/host lives on the host, not in git.
+.env
