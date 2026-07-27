@@ -1,0 +1,11 @@
+# TLS front for osrm-routed. Caddy fetches/renews certs automatically.
+# Replace the hostname, then run:  caddy run --config Caddyfile
+#
+# Do NOT expose port 5000 directly — OSRM has no authentication. Keep osrm-routed
+# bound to 127.0.0.1 (see .env OSRM_BIND) and let Caddy be the only public door.
+osrm.your-domain.com {
+	reverse_proxy 127.0.0.1:5000
+	# Optional hardening: restrict to Vercel's egress ranges once known, e.g.
+	# @notvercel not remote_ip <range> ...
+	# respond @notvercel 403
+}
