@@ -20,7 +20,11 @@ from app.providers.elevation import OpenElevationClient
 from app.providers.geocoding import NominatimGeocoder
 from app.providers.routing import OSRMRoutingEngine
 from app.schemas.routes import (
+    AlternativesRequest,
+    AlternativesResponse,
     CustomRouteRequest,
+    GeocodeRequest,
+    GeocodeResponse,
     NearestRequest,
     NearestResponse,
     PlannedRoute,
@@ -253,5 +257,59 @@ def snap_route(
             detail={
                 "code": "provider_error",
                 "message": "We couldn't snap that route to the map.",
+            },
+        ) from None
+
+
+@router.post(
+    "/geocode",
+    response_model=GeocodeResponse,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def geocode_address(
+    payload: GeocodeRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> GeocodeResponse:
+    """Resolve an address to a point for the multi-stop route builder."""
+
+    try:
+        return planner.geocode(payload.address)
+    except AddressNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "address_not_found",
+                "message": "We couldn't find that address.",
+            },
+        ) from None
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "The geocoder is unavailable. Please try again shortly.",
+            },
+        ) from None
+
+
+@router.post(
+    "/alternatives",
+    response_model=AlternativesResponse,
+    dependencies=[Depends(enforce_plan_rate_limit)],
+)
+def route_alternatives(
+    payload: AlternativesRequest,
+    planner: Annotated[RoutePlanner, Depends(get_route_planner)],
+) -> AlternativesResponse:
+    """Route options between two points (loop mode picks the least-overlapping)."""
+
+    try:
+        return planner.route_alternatives(payload.start, payload.end)
+    except ProviderError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "provider_error",
+                "message": "We couldn't find a route between those points.",
             },
         ) from None

@@ -14,11 +14,14 @@ from app.providers.base import (
 )
 from app.providers.elevation import sample_coordinates
 from app.schemas.routes import (
+    AlternativesResponse,
+    GeocodeResponse,
     LineStringGeometry,
     NearestResponse,
     PlannedRoute,
     PlanRequest,
     PlanResponse,
+    RouteOption,
     SegmentResponse,
     SnapRouteResponse,
     StartPoint,
@@ -130,6 +133,30 @@ class RoutePlanner:
             intersection_subscore=result.intersection_subscore,
             within_tolerance=True,
             provider=generated.provider,
+        )
+
+    def geocode(self, address: str) -> GeocodeResponse:
+        """Resolve an address to a point (for the multi-stop route builder)."""
+
+        result = self._geocoder.geocode(address.strip())
+        return GeocodeResponse(
+            latitude=result.latitude, longitude=result.longitude, label=result.label
+        )
+
+    def route_alternatives(
+        self, start: list[float], end: list[float]
+    ) -> AlternativesResponse:
+        """Route options between two points, for least-overlap loop closing."""
+
+        options = self._routing.route_alternatives(start, end)
+        return AlternativesResponse(
+            routes=[
+                RouteOption(
+                    geometry=LineStringGeometry(type="LineString", coordinates=coords),
+                    distance_km=round(distance_km, 3),
+                )
+                for coords, distance_km in options
+            ]
         )
 
     def nearest(self, point: list[float]) -> NearestResponse:

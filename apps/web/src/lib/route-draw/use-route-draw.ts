@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import { routeSegment, type RoutedSegment } from "@/lib/api/routes-client";
+import {
+  routeAlternatives,
+  routeSegment,
+  type RoutedSegment,
+} from "@/lib/api/routes-client";
+import { leastOverlappingIndex } from "./loop-overlap";
 import {
   assembleCoordinates,
   canRedo,
@@ -151,6 +156,54 @@ export function useRouteDraw() {
     }
   }, []);
 
+  /**
+   * Build a structured route through ordered waypoints (from geocoded
+   * addresses): route each consecutive pair via /segment in parallel. If
+   * `loop`, add a closing leg back to the start chosen from OSRM alternatives
+   * to retrace the outbound the least. Committed as one undoable step.
+   */
+  const buildFromWaypoints = useCallback(
+    async (points: Position[], loop: boolean) => {
+      if (points.length < 2) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const seq = ++seqRef.current;
+
+      dispatch({ type: "setStatus", status: "routing" });
+      try {
+        const legs = await Promise.all(
+          points.slice(1).map((p, i) => routeSegment(points[i], p, controller.signal)),
+        );
+        if (seq !== seqRef.current) return;
+
+        let verts = points;
+        let segments = legs;
+        if (loop) {
+          const alternatives = await routeAlternatives(
+            points[points.length - 1],
+            points[0],
+            controller.signal,
+          );
+          if (seq !== seqRef.current) return;
+          const used = legs.flatMap((l) => l.geometry.coordinates as Position[]);
+          const best = leastOverlappingIndex(
+            alternatives.map((a) => a.geometry.coordinates as Position[]),
+            used,
+          );
+          segments = [...legs, alternatives[best]];
+          verts = [...points, points[0]]; // return to the start
+        }
+        dispatch({ type: "setDoc", doc: buildDoc(verts, segments) });
+        dispatch({ type: "setStatus", status: "idle" });
+      } catch {
+        if (controller.signal.aborted) return;
+        dispatch({ type: "setStatus", status: "invalid" });
+      }
+    },
+    [],
+  );
+
   const undo = useCallback(() => dispatch({ type: "undo" }), []);
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
   const clear = useCallback(() => dispatch({ type: "clear" }), []);
@@ -181,6 +234,7 @@ export function useRouteDraw() {
     isRouting: state.status === "routing",
     error: state.status === "invalid",
     buildFromDrag,
+    buildFromWaypoints,
     moveWaypoint,
     undo,
     redo,
