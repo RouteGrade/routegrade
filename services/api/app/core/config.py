@@ -139,6 +139,17 @@ class Settings(BaseSettings):
         description="Extra burst headroom (capacity = per_minute + burst)",
     )
 
+    # Defense-in-depth cap on request body size. Pydantic already bounds array
+    # lengths per endpoint, but an oversized payload is otherwise fully buffered
+    # into memory before validation runs. 1 MiB comfortably fits the largest
+    # valid body (a 5000-point coordinate trace is ~150 KB) while rejecting
+    # multi-megabyte abuse up front with a 413.
+    max_request_body_bytes: int = Field(
+        default=1_048_576,
+        ge=0,
+        description="Reject request bodies larger than this many bytes (413); 0 disables",
+    )
+
 
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod
