@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -7,18 +7,21 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+// Display face for grades, distances and pace. Archivo holds up at 80px+ in
+// heavy weights and its tabular figures don't jitter as a run metric ticks.
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
+  weight: ["600", "700", "800"],
 });
 
 // viewport-fit=cover lets the map extend behind notches/home indicator;
-// safe-area insets in the UI keep controls clear of them.
+// safe-area insets in the shell keep the tab bar and controls clear of them.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#09090b",
+  themeColor: "#0a0a0a",
 };
 
 export const metadata: Metadata = {
@@ -35,9 +38,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${inter.variable} ${archivo.variable} h-full antialiased`}
     >
-      <body className="h-full font-sans">{children}</body>
+      <body className="h-full bg-canvas font-sans text-ink">{children}</body>
     </html>
   );
 }

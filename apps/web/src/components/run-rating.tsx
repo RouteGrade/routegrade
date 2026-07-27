@@ -47,7 +47,7 @@ function StarButton({
       <svg
         viewBox="0 0 24 24"
         className={`h-8 w-8 transition-colors ${
-          filled ? "text-amber-400" : "text-zinc-600"
+          filled ? "text-volt" : "text-faint"
         }`}
         fill={filled ? "currentColor" : "none"}
         stroke="currentColor"
@@ -77,8 +77,8 @@ export function RunRating({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+    <div className="rounded-card border border-hairline bg-white/[0.03] p-4">
+      <p className="text-center text-[11px] font-semibold uppercase tracking-widest text-muted">
         How was this route?
       </p>
 
@@ -97,7 +97,7 @@ export function RunRating({
       {value.overall > 0 && (
         <div className="animate-float-in mt-4 flex flex-col gap-3">
           <div>
-            <p className="mb-1.5 text-center text-[10px] uppercase tracking-wider text-zinc-500">
+            <p className="mb-1.5 text-center text-[10px] uppercase tracking-wider text-faint">
               Did our grade match?
             </p>
             <div className="grid grid-cols-3 gap-1.5">
@@ -117,8 +117,8 @@ export function RunRating({
                     }
                     className={`rounded-lg border px-1.5 py-2 text-[11px] font-semibold leading-tight transition ${
                       selected
-                        ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                        ? "border-volt bg-volt-wash text-volt"
+                        : "border-hairline bg-raised text-muted hover:bg-raised"
                     }`}
                   >
                     {option.label}
@@ -129,7 +129,7 @@ export function RunRating({
           </div>
 
           <div>
-            <p className="mb-1.5 text-center text-[10px] uppercase tracking-wider text-zinc-500">
+            <p className="mb-1.5 text-center text-[10px] uppercase tracking-wider text-faint">
               Add a few tags (optional)
             </p>
             <div className="flex flex-wrap justify-center gap-1.5">
@@ -145,9 +145,9 @@ export function RunRating({
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                       selected
                         ? tag.positive
-                          ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300"
-                          : "border-amber-400/50 bg-amber-400/15 text-amber-300"
-                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                          ? "border-volt bg-volt-wash text-volt"
+                          : "border-amber-400/50 bg-amber-400/15 text-muted"
+                        : "border-hairline bg-raised text-muted hover:bg-raised"
                     }`}
                   >
                     {tag.label}

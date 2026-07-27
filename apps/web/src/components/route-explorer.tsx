@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/routes-client";
 import { deriveReasons } from "@/lib/scorecard";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
+import { useImmersive } from "./shell/app-shell";
 import { RouteGradeLogo } from "./brand/route-grade-logo";
 import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
@@ -27,8 +28,8 @@ import type { RunTelemetry } from "./run-tracker";
 const RouteMap = dynamic(() => import("./route-map"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-zinc-950">
-      <span className="text-sm text-zinc-500">Loading map…</span>
+    <div className="flex h-full w-full items-center justify-center bg-canvas">
+      <span className="text-sm text-faint">Loading map…</span>
     </div>
   ),
 });
@@ -109,13 +110,13 @@ const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = 
 
 function StatusPill({ status }: { status: ApiStatus }) {
   const config = {
-    checking: { dot: "bg-amber-400", ring: "bg-amber-400/40", label: "Checking API…" },
-    online: { dot: "bg-emerald-400", ring: "bg-emerald-400/40", label: "API connected" },
-    offline: { dot: "bg-rose-500", ring: "bg-rose-500/40", label: "API offline" },
+    checking: { dot: "bg-muted", ring: "bg-muted/40", label: "Checking API…" },
+    online: { dot: "bg-volt", ring: "bg-volt/40", label: "API connected" },
+    offline: { dot: "bg-danger", ring: "bg-danger/40", label: "API offline" },
   }[status];
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-raised px-2.5 py-1 text-[11px] font-medium text-ink">
       <span className="relative flex h-2 w-2">
         {status !== "offline" && (
           <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${config.ring}`} />
@@ -129,7 +130,7 @@ function StatusPill({ status }: { status: ApiStatus }) {
 
 function GradeBadge({ grade }: { grade: string }) {
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-400 to-lime-400 font-display text-lg font-extrabold text-zinc-950 shadow-lg shadow-emerald-500/30">
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-volt font-display text-lg font-extrabold text-canvas">
       {grade}
     </span>
   );
@@ -143,13 +144,14 @@ type ActiveRoute = {
 };
 
 export default function RouteExplorer({
-  sessionNav,
   isAuthenticated = false,
   savedRouteId,
+  startInDrawMode = false,
 }: {
-  sessionNav?: React.ReactNode;
   isAuthenticated?: boolean;
   savedRouteId?: string;
+  /** Open straight into draw mode (the Routes tab links here with ?draw=1). */
+  startInDrawMode?: boolean;
 } = {}) {
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [address, setAddress] = useState("");
@@ -169,10 +171,10 @@ export default function RouteExplorer({
   const [reopened, setReopened] = useState<ActiveRoute | null>(null);
   // Mobile-only: the planner form collapses into a bottom-sheet header so the
   // map stays visible. Ignored on sm+ where the form is always shown.
-  const [formOpen, setFormOpen] = useState(true);
+  const [formOpen, setFormOpen] = useState(!startInDrawMode);
   // "Create your own route": freehand draw on the map, then grade the drawn
   // path through /custom and hand the result to the normal result card.
-  const [drawing, setDrawing] = useState(false);
+  const [drawing, setDrawing] = useState(startInDrawMode);
   // Structured, road-snapped route the user draws (waypoints + routed segments,
   // with undo/redo). Built from the drag on release; graded via /custom.
   const draw = useRouteDraw();
@@ -184,6 +186,10 @@ export default function RouteExplorer({
   const [runTelemetry, setRunTelemetry] = useState<RunTelemetry | null>(null);
   // Shareable scorecard overlay — private until the user explicitly opens it.
   const [scorecardOpen, setScorecardOpen] = useState(false);
+
+  // A live run owns the whole screen: drop the tab bar so nothing competes with
+  // the metrics, and so a stray tap can't navigate away mid-run and lose GPS.
+  useImmersive(runMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -474,7 +480,12 @@ export default function RouteExplorer({
     ? [
         { label: "Elevation", value: active.route.elevation_subscore },
         { label: "Quietness", value: active.route.intersection_subscore },
-      ].filter((f): f is { label: string; value: number } => f.value !== null)
+        // Not just `!== null`: a route from an older API response (or a saved
+        // route predating subscores) omits the field entirely, and `undefined`
+        // slipped through to render a "NaN" bar.
+      ].filter((f): f is { label: string; value: number } =>
+        Number.isFinite(f.value),
+      )
     : [];
 
   const handleStartRun = () => {
@@ -483,7 +494,7 @@ export default function RouteExplorer({
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-zinc-950">
+    <div className="relative h-full w-full overflow-hidden bg-canvas">
       <RouteMap
         geometry={mapGeometry}
         runner={runTelemetry}
@@ -511,25 +522,25 @@ export default function RouteExplorer({
       {/* Draw-mode overlay: instructions → routing → name/edit/grade. */}
       {!runMode && (drawing || draw.isRouting || draw.hasRoute) && !plan && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-          <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/85 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
+          <div className="pointer-events-auto w-full max-w-md rounded-card border border-hairline bg-surface p-4 shadow-2xl shadow-black/60">
             {drawing ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-zinc-200">
-                  <span className="mr-1.5 text-pink-400">✎</span>
+                <p className="text-sm font-medium text-ink">
+                  <span className="mr-1.5 text-volt">✎</span>
                   Drag to draw — your route snaps to the roads as you go.
                 </p>
                 <button
                   type="button"
                   onClick={cancelDrawing}
-                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/10"
+                  className="shrink-0 rounded-full border border-hairline-strong px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-raised"
                 >
                   Cancel
                 </button>
               </div>
             ) : draw.isRouting ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-emerald-400">
+                <p className="flex items-center gap-2 text-sm font-medium text-ink">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-volt">
                     <path d="M21 12a9 9 0 1 1-6.2-8.56" />
                   </svg>
                   Snapping your route to the roads…
@@ -537,7 +548,7 @@ export default function RouteExplorer({
                 <button
                   type="button"
                   onClick={cancelDrawing}
-                  className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/10"
+                  className="shrink-0 rounded-full border border-hairline-strong px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-raised"
                 >
                   Cancel
                 </button>
@@ -545,13 +556,13 @@ export default function RouteExplorer({
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-white">Name your route</p>
-                  <span className="text-xs font-medium tabular-nums text-emerald-300">
+                  <p className="text-sm font-semibold text-ink">Name your route</p>
+                  <span className="text-xs font-medium tabular-nums text-volt">
                     {(draw.distanceMeters / 1000).toFixed(2)} km
                   </span>
                 </div>
-                <p className="-mt-1 text-[11px] text-zinc-500">
-                  Drag the pink dots on the map to fine-tune the route.
+                <p className="-mt-1 text-[11px] text-faint">
+                  Drag the dots on the map to fine-tune the route.
                 </p>
                 <input
                   type="text"
@@ -559,14 +570,14 @@ export default function RouteExplorer({
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="My route"
                   maxLength={120}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 focus:border-emerald-400/50 focus:outline-none"
+                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-volt focus:outline-none"
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={draw.undo}
                     disabled={!draw.canUndo || grading}
-                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-40"
+                    className="h-11 flex-1 rounded-control border border-hairline-strong text-sm font-semibold text-ink transition hover:bg-raised disabled:opacity-40"
                   >
                     Undo
                   </button>
@@ -574,7 +585,7 @@ export default function RouteExplorer({
                     type="button"
                     onClick={draw.redo}
                     disabled={!draw.canRedo || grading}
-                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-40"
+                    className="h-11 flex-1 rounded-control border border-hairline-strong text-sm font-semibold text-ink transition hover:bg-raised disabled:opacity-40"
                   >
                     Redo
                   </button>
@@ -586,7 +597,7 @@ export default function RouteExplorer({
                       setDrawing(true);
                     }}
                     disabled={grading}
-                    className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-60"
+                    className="h-11 flex-1 rounded-control border border-hairline-strong text-sm font-semibold text-ink transition hover:bg-raised disabled:opacity-60"
                   >
                     Redraw
                   </button>
@@ -595,19 +606,19 @@ export default function RouteExplorer({
                   type="button"
                   onClick={gradeDrawnRoute}
                   disabled={grading}
-                  className="h-10 w-full rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                  className="rg-btn rg-btn-primary w-full disabled:cursor-wait"
                 >
                   {grading ? "Grading…" : "Grade this route"}
                 </button>
                 <button
                   type="button"
                   onClick={cancelDrawing}
-                  className="text-center text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
+                  className="text-center text-xs font-medium text-faint transition hover:text-ink"
                 >
                   Cancel
                 </button>
                 {(drawError || draw.error) && (
-                  <p role="alert" className="text-center text-xs text-rose-400">
+                  <p role="alert" className="text-center text-xs text-danger">
                     {drawError ??
                       "We couldn't route part of that. Try redrawing along connected paths."}
                   </p>
@@ -619,29 +630,28 @@ export default function RouteExplorer({
       )}
 
       {/* Vignettes for legibility — top on desktop, bottom behind the mobile sheet */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-zinc-950/80 to-transparent sm:block" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-linear-to-t from-zinc-950/80 to-transparent sm:hidden" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-canvas/80 to-transparent sm:block" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-linear-to-t from-canvas/80 to-transparent sm:hidden" />
 
       {/* Bottom sheet on phones (results stacked above the controls),
           fixed left column on sm+. Hidden entirely while a run is live. */}
       {!runMode && (
       <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col-reverse gap-2 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100dvh-2.5rem)] sm:w-[380px] sm:flex-col sm:gap-3 sm:p-0">
         {/* Control card */}
-        <section className="rounded-2xl border border-white/10 bg-zinc-950/75 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-5">
+        <section className="rounded-card border border-hairline bg-surface p-4 shadow-2xl shadow-black/60 sm:p-5">
           <header
             className={`flex items-center justify-between gap-3 ${formOpen ? "mb-5" : "mb-0"} sm:mb-5 sm:items-start`}
           >
             <RouteGradeLogo tagline />
             <div className="flex items-center gap-2">
               <StatusPill status={apiStatus} />
-              {sessionNav}
               <button
                 type="button"
                 onClick={() => setFormOpen((open) => !open)}
                 aria-expanded={formOpen}
                 aria-controls="planner-form"
                 aria-label={formOpen ? "Hide route options" : "Show route options"}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 sm:hidden"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline bg-raised text-ink transition hover:bg-raised sm:hidden"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -666,12 +676,12 @@ export default function RouteExplorer({
             <div>
               <label
                 htmlFor="start-address"
-                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400"
+                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted"
               >
                 Starting point
               </label>
               <div className="relative">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint">
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
@@ -684,14 +694,14 @@ export default function RouteExplorer({
                     setCoords(null);
                   }}
                   placeholder="Nathan Phillips Square, Toronto"
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-9 pr-3 text-base text-white placeholder:text-zinc-500 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-2 focus:ring-emerald-400/20 sm:text-sm"
+                  className="h-11 w-full rounded-control border border-hairline bg-raised pl-9 pr-3 text-base text-ink placeholder:text-faint outline-none transition focus:border-volt sm:text-sm"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleUseMyLocation}
                 disabled={locating}
-                className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 transition hover:text-emerald-300 disabled:opacity-60"
+                className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-volt transition hover:text-volt disabled:opacity-60"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${locating ? "animate-spin" : ""}`}>
                   <circle cx="12" cy="12" r="3" />
@@ -705,11 +715,11 @@ export default function RouteExplorer({
               <div className="mb-1.5 flex items-center justify-between">
                 <label
                   htmlFor="distance"
-                  className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-muted"
                 >
                   Distance
                 </label>
-                <span className="rounded-md bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-emerald-300">
+                <span className="rounded-md bg-volt-wash px-2 py-0.5 text-xs font-semibold tabular-nums text-volt">
                   {distanceKm.toFixed(1)} km
                 </span>
               </div>
@@ -724,14 +734,14 @@ export default function RouteExplorer({
                 className="rg-slider"
                 style={{ "--slider-progress": `${sliderProgress}%` } as React.CSSProperties}
               />
-              <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+              <div className="mt-1 flex justify-between text-[10px] text-faint">
                 <span>1 km</span>
                 <span>15 km</span>
               </div>
             </div>
 
             <div>
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted">
                 Vibe
               </span>
               <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Route preference">
@@ -744,10 +754,10 @@ export default function RouteExplorer({
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setPreference(option.id)}
-                      className={`flex h-14 flex-col items-center justify-center gap-1 rounded-xl border text-xs font-medium transition ${
+                      className={`flex h-14 flex-col items-center justify-center gap-1 rounded-control border text-xs font-medium transition ${
                         selected
-                          ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300 shadow-inner shadow-emerald-400/10"
-                          : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:bg-white/10 hover:text-zinc-200"
+                          ? "border-volt bg-volt-wash text-volt "
+                          : "border-hairline bg-raised text-muted hover:border-hairline-strong hover:bg-raised hover:text-ink"
                       }`}
                     >
                       {option.icon}
@@ -761,7 +771,7 @@ export default function RouteExplorer({
             <button
               type="submit"
               disabled={searching}
-              className="group relative mt-1 flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/25 transition hover:shadow-emerald-400/40 hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-80"
+              className="group relative mt-1 flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-80"
             >
               {searching ? (
                 <>
@@ -782,22 +792,22 @@ export default function RouteExplorer({
             </button>
 
             {planError && (
-              <p role="alert" className="text-xs text-rose-400">
+              <p role="alert" className="text-xs text-danger">
                 {planError}
               </p>
             )}
 
             <div className="flex items-center gap-3">
-              <span className="h-px flex-1 bg-white/10" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+              <span className="h-px flex-1 bg-raised" />
+              <span className="text-[10px] font-medium uppercase tracking-wider text-faint">
                 or
               </span>
-              <span className="h-px flex-1 bg-white/10" />
+              <span className="h-px flex-1 bg-raised" />
             </div>
             <button
               type="button"
               onClick={startDrawing}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                 <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -812,7 +822,7 @@ export default function RouteExplorer({
 
         {/* Route result card */}
         {active && (
-          <section className="animate-float-in rounded-2xl border border-white/10 bg-zinc-950/75 p-4 shadow-2xl shadow-black/60 backdrop-blur-xl">
+          <section className="animate-float-in rounded-card border border-hairline bg-surface p-4 shadow-2xl shadow-black/60">
             {plan && plan.routes.length > 1 && (
               <div className="mb-3 flex gap-1.5" role="tablist" aria-label="Route candidates">
                 {plan.routes.map((candidate, index) => (
@@ -824,8 +834,8 @@ export default function RouteExplorer({
                     onClick={() => setActiveIndex(index)}
                     className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition ${
                       index === activeIndex
-                        ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10"
+                        ? "border-volt bg-volt-wash text-volt"
+                        : "border-hairline bg-raised text-muted hover:bg-raised"
                     }`}
                   >
                     {candidate.grade} · {candidate.distance_km.toFixed(1)} km
@@ -837,20 +847,20 @@ export default function RouteExplorer({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h2 className="truncate font-display text-sm font-bold text-white">
+                  <h2 className="truncate font-display text-sm font-bold text-ink">
                     {active.route.name}
                   </h2>
                   {active.route.provider === "saved" ? (
-                    <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                    <span className="shrink-0 rounded-full border border-volt/40 bg-volt-wash px-2 py-0.5 text-[10px] font-medium text-volt">
                       Saved
                     </span>
                   ) : !active.route.within_tolerance ? (
-                    <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                    <span className="shrink-0 rounded-full border border-hairline-strong bg-raised px-2 py-0.5 text-[10px] font-medium text-muted">
                       Off target
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-0.5 text-[11px] text-zinc-400">
+                <p className="mt-0.5 text-[11px] text-muted">
                   Graded from elevation, intersections &amp; sidewalk data.
                 </p>
               </div>
@@ -863,11 +873,11 @@ export default function RouteExplorer({
                 { label: "Est. time", value: `${estMinutes} min` },
                 { label: "Elevation", value: `${Math.round(active.route.elevation_gain_m)} m` },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-xl border border-white/10 bg-white/5 py-2">
-                  <dt className="text-[10px] uppercase tracking-wider text-zinc-500">
+                <div key={stat.label} className="rounded-control border border-hairline bg-raised py-2">
+                  <dt className="text-[10px] uppercase tracking-wider text-faint">
                     {stat.label}
                   </dt>
-                  <dd className="text-sm font-semibold tabular-nums text-white">
+                  <dd className="text-sm font-semibold tabular-nums text-ink">
                     {stat.value}
                   </dd>
                 </div>
@@ -875,24 +885,24 @@ export default function RouteExplorer({
             </dl>
 
             {(subscoreFactors.length > 0 || gradeReasons.length > 0) && (
-              <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              <div className="mt-3 rounded-control border border-hairline bg-raised p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
                   Why this grade
                 </p>
                 {subscoreFactors.length > 0 && (
                   <div className="mt-2 flex flex-col gap-1.5">
                     {subscoreFactors.map((factor) => (
                       <div key={factor.label} className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-[11px] text-zinc-400">
+                        <span className="w-16 shrink-0 text-[11px] text-muted">
                           {factor.label}
                         </span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                           <div
-                            className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400"
+                            className="h-full rounded-full bg-volt"
                             style={{ width: `${Math.round(factor.value)}%` }}
                           />
                         </div>
-                        <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-zinc-300">
+                        <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-ink">
                           {Math.round(factor.value)}
                         </span>
                       </div>
@@ -904,7 +914,7 @@ export default function RouteExplorer({
                     {gradeReasons.map((reason, i) => (
                       <li
                         key={`${reason.key}-${i}`}
-                        className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+                        className="rounded-full border border-hairline bg-raised px-2 py-0.5 text-[10px] font-medium text-ink"
                       >
                         {reason.text}
                       </li>
@@ -918,7 +928,7 @@ export default function RouteExplorer({
               <button
                 type="button"
                 onClick={handleStartRun}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/25 transition hover:shadow-emerald-400/40 hover:brightness-110 active:scale-[0.98]"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98]"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
                   <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
@@ -928,7 +938,7 @@ export default function RouteExplorer({
               <button
                 type="button"
                 onClick={() => setScorecardOpen(true)}
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -941,10 +951,10 @@ export default function RouteExplorer({
                   type="button"
                   onClick={handleSave}
                   disabled={saving || activeSaved}
-                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition ${
+                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-control text-sm font-semibold transition ${
                     activeSaved
-                      ? "cursor-default border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                      : "border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
+                      ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
+                      : "border border-hairline bg-raised text-ink hover:bg-raised disabled:cursor-wait disabled:opacity-70"
                   }`}
                 >
                   {activeSaved ? (
@@ -975,13 +985,13 @@ export default function RouteExplorer({
                       });
                     }
                   }}
-                  className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                  className="flex h-10 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
                 >
                   Sign in to save this route
                 </Link>
               )}
               {saveError && (
-                <p role="alert" className="mt-2 text-xs text-rose-400">
+                <p role="alert" className="mt-2 text-xs text-danger">
                   {saveError}
                 </p>
               )}

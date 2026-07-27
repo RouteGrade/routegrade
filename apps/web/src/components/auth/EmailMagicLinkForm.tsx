@@ -50,10 +50,10 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
       <div
         role="status"
         aria-live="polite"
-        className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200"
+        className="rounded-control border border-volt/40 bg-volt-wash p-4 text-sm text-volt"
       >
         <p className="font-semibold">Check your email</p>
-        <p className="mt-1 text-xs text-emerald-100/80">
+        <p className="mt-1 text-xs text-volt/80">
           If an account exists for that address, we&apos;ve sent a sign-in link.
         </p>
       </div>
@@ -65,7 +65,7 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
       <div>
         <label
           htmlFor="magic-email"
-          className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400"
+          className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted"
         >
           Email
         </label>
@@ -77,18 +77,18 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="runner@example.com"
-          className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-emerald-400/60 focus:bg-white/10 focus:ring-2 focus:ring-emerald-400/20"
+          className="h-11 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint outline-none transition focus:border-volt"
         />
       </div>
       <button
         type="submit"
         disabled={status === "sending"}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-wait disabled:opacity-70"
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-white/20 disabled:cursor-wait disabled:opacity-70"
       >
         {status === "sending" ? "Sending link…" : "Email me a sign-in link"}
       </button>
       {error && (
-        <p role="alert" className="text-xs text-rose-400">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       )}

@@ -38,14 +38,14 @@ export function GoogleSignInButton({ next }: { next?: string }) {
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 disabled:cursor-wait disabled:opacity-70"
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-control border border-hairline bg-white text-sm font-semibold text-canvas transition hover:bg-ink disabled:cursor-wait disabled:opacity-70"
         aria-label="Continue with Google"
       >
         <GoogleIcon />
         {busy ? "Redirecting…" : "Continue with Google"}
       </button>
       {error && (
-        <p role="alert" className="mt-2 text-xs text-rose-400">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       )}

@@ -28,7 +28,7 @@ export function SignOutButton({ className }: { className?: string }) {
       disabled={busy}
       className={
         className ??
-        "inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-60"
+        "inline-flex h-9 items-center justify-center rounded-lg border border-hairline bg-raised px-3 text-xs font-semibold text-ink transition hover:bg-raised disabled:opacity-60"
       }
     >
       {busy ? "Signing out…" : "Log out"}

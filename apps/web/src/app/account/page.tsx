@@ -1,21 +1,10 @@
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { AccountView } from "./account-view";
+import { permanentRedirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function AccountPage() {
-  const supabase = await createSupabaseServerClient();
-
-  // Use getUser() — it revalidates against Supabase (unlike the unverified
-  // user object returned by getSession()).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?next=/account");
-  }
-
-  return <AccountView />;
+/**
+ * The account screen became the "You" tab in the app shell. Kept as a permanent
+ * redirect so old links, bookmarks and any `?next=/account` auth callbacks
+ * still land somewhere sensible.
+ */
+export default function AccountPage() {
+  permanentRedirect("/you");
 }
