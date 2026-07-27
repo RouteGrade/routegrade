@@ -104,7 +104,11 @@ async function drawOutAndBack(page: Page): Promise<void> {
   await page.mouse.up();
 }
 
-test.describe("draw your own route", () => {
+// Shelved 2026-07-23: the freehand draw tool is hidden behind ROUTE_DRAW_ENABLED
+// while it's replaced by the address-based multi-stop route builder. These
+// tests are kept (not deleted) and skipped; flip .skip back when the code
+// returns to the UI.
+test.describe.skip("draw your own route", () => {
   test.beforeEach(async ({ page, context }) => {
     await context.addCookies([
       { name: "rg_guest", value: "1", url: "http://localhost:3000" },
