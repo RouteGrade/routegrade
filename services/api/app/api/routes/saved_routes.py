@@ -12,8 +12,14 @@ from sqlalchemy.orm import Session
 from app.api.rate_limit_deps import enforce_saved_routes_write_rate_limit
 from app.auth.dependencies import CurrentClaims
 from app.db.session import get_db
+from app.repositories import route_feedback as feedback_repo
 from app.repositories import saved_routes as repo
 from app.repositories.saved_routes import RouteIdCollision
+from app.schemas.route_feedback import (
+    RouteFeedbackEnvelope,
+    RouteFeedbackRead,
+    RouteFeedbackSave,
+)
 from app.schemas.routes import (
     SavedRouteEnvelope,
     SavedRouteList,
@@ -26,6 +32,11 @@ router = APIRouter(prefix="/v1/users/me/routes", tags=["saved-routes"])
 _NOT_FOUND = HTTPException(
     status_code=status.HTTP_404_NOT_FOUND,
     detail={"code": "route_not_found", "message": "Saved route not found"},
+)
+
+_FEEDBACK_NOT_FOUND = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail={"code": "feedback_not_found", "message": "Route feedback not found"},
 )
 
 
@@ -107,4 +118,86 @@ def delete_route(
 
     if not deleted:
         raise _NOT_FOUND
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --------------------------------------------------------------------------- #
+# Route-view grade feedback — "is this grade accurate?" (scoring calibration). #
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/{route_id}/feedback", response_model=RouteFeedbackRead)
+def get_route_feedback(
+    route_id: uuid.UUID,
+    claims: CurrentClaims,
+    session: Annotated[Session, Depends(get_db)],
+) -> RouteFeedbackRead:
+    feedback = feedback_repo.get_for_route(
+        session, user_id=claims.user_id, route_id=route_id
+    )
+    if feedback is None:
+        raise _FEEDBACK_NOT_FOUND
+    return RouteFeedbackRead.model_validate(feedback)
+
+
+@router.put(
+    "/{route_id}/feedback",
+    response_model=RouteFeedbackEnvelope,
+    dependencies=[Depends(enforce_saved_routes_write_rate_limit)],
+)
+def save_route_feedback(
+    route_id: uuid.UUID,
+    payload: RouteFeedbackSave,
+    claims: CurrentClaims,
+    response: Response,
+    session: Annotated[Session, Depends(get_db)],
+) -> RouteFeedbackEnvelope:
+    """Idempotently persist the runner's grade verdict for one route.
+
+    Keyed on `(user_id, route_id)`, so re-submitting overwrites the same row. We
+    do not require the route to already be saved server-side — the client may
+    submit a verdict alongside the save, and feedback with no matching route is
+    simply excluded from calibration joins downstream.
+    """
+
+    fields = payload.model_dump()
+    try:
+        feedback, created = feedback_repo.upsert_for_route(
+            session, user_id=claims.user_id, route_id=route_id, fields=fields
+        )
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not save feedback",
+        ) from None
+
+    if created:
+        response.status_code = status.HTTP_201_CREATED
+    return RouteFeedbackEnvelope(
+        feedback=RouteFeedbackRead.model_validate(feedback), created=created
+    )
+
+
+@router.delete("/{route_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
+def delete_route_feedback(
+    route_id: uuid.UUID,
+    claims: CurrentClaims,
+    session: Annotated[Session, Depends(get_db)],
+) -> Response:
+    try:
+        deleted = feedback_repo.delete_for_route(
+            session, user_id=claims.user_id, route_id=route_id
+        )
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not delete feedback",
+        ) from None
+
+    if not deleted:
+        raise _FEEDBACK_NOT_FOUND
     return Response(status_code=status.HTTP_204_NO_CONTENT)
