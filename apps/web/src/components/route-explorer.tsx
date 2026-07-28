@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { LineString } from "geojson";
 import {
@@ -18,10 +17,10 @@ import {
   type PlannedRoute,
   type Preference,
 } from "@/lib/api/routes-client";
-import { deriveReasons } from "@/lib/scorecard";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { useImmersive } from "./shell/app-shell";
 import { PlannerHero } from "./run-tab/planner-hero";
+import { RouteDetail } from "./route-detail/route-detail";
 import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
 import type { RunTelemetry } from "./run-tracker";
@@ -36,8 +35,6 @@ const RouteMap = dynamic(() => import("./route-map"), {
 });
 
 type ApiStatus = "checking" | "online" | "offline";
-
-const PACE_MIN_PER_KM = 6;
 
 // Shelved 2026-07-23: the freehand "draw your own route" tool didn't work as
 // intended. Its code (route-map draw mode, lib/route-draw, /nearest, /segment)
@@ -78,14 +75,6 @@ function takeGuestPlan(): GuestPlanStash | null {
   } catch {
     return null;
   }
-}
-
-function GradeBadge({ grade }: { grade: string }) {
-  return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-volt font-display text-lg font-extrabold text-canvas">
-      {grade}
-    </span>
-  );
 }
 
 type ActiveRoute = {
@@ -477,19 +466,6 @@ export default function RouteExplorer({
   };
 
   const activeSaved = active ? active.saved || savedIds.has(active.route.id) : false;
-  const estMinutes = active ? Math.round(active.route.distance_km * PACE_MIN_PER_KM) : 0;
-  const gradeReasons = active ? deriveReasons(active.route) : [];
-  const subscoreFactors = active
-    ? [
-        { label: "Elevation", value: active.route.elevation_subscore },
-        { label: "Quietness", value: active.route.intersection_subscore },
-        // Not just `!== null`: a route from an older API response (or a saved
-        // route predating subscores) omits the field entirely, and `undefined`
-        // slipped through to render a "NaN" bar.
-      ].filter((f): f is { label: string; value: number } =>
-        Number.isFinite(f.value),
-      )
-    : [];
 
   const handleStartRun = () => {
     primeSpeech(); // unlock speech synthesis while we still have a user gesture
@@ -774,188 +750,31 @@ export default function RouteExplorer({
         </button>
       )}
 
-      {!runMode && (
-      <div className="absolute inset-x-0 bottom-0 z-20 flex max-h-full flex-col gap-2 overflow-y-auto p-3 sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100%-2.5rem)] sm:w-[380px] sm:p-0">
-
-        {/* Route result card */}
-        {active && (
-          <section className="animate-float-in rounded-card border border-hairline bg-surface p-4 shadow-2xl shadow-black/60">
-            {plan && plan.routes.length > 1 && (
-              <div className="mb-3 flex gap-1.5" role="tablist" aria-label="Route candidates">
-                {plan.routes.map((candidate, index) => (
-                  <button
-                    key={candidate.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={index === activeIndex}
-                    onClick={() => setActiveIndex(index)}
-                    className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition ${
-                      index === activeIndex
-                        ? "border-volt bg-volt-wash text-volt"
-                        : "border-hairline bg-raised text-muted hover:bg-raised"
-                    }`}
-                  >
-                    {candidate.grade} · {candidate.distance_km.toFixed(1)} km
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate font-display text-sm font-bold text-ink">
-                    {active.route.name}
-                  </h2>
-                  {active.route.provider === "saved" ? (
-                    <span className="shrink-0 rounded-full border border-volt/40 bg-volt-wash px-2 py-0.5 text-[10px] font-medium text-volt">
-                      Saved
-                    </span>
-                  ) : !active.route.within_tolerance ? (
-                    <span className="shrink-0 rounded-full border border-hairline-strong bg-raised px-2 py-0.5 text-[10px] font-medium text-muted">
-                      Off target
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-0.5 text-[11px] text-muted">
-                  Graded from elevation, intersections &amp; sidewalk data.
-                </p>
-              </div>
-              <GradeBadge grade={active.route.grade} />
-            </div>
-
-            <dl className="mt-3 grid grid-cols-3 gap-1.5 text-center">
-              {[
-                { label: "Distance", value: `${active.route.distance_km.toFixed(1)} km` },
-                { label: "Est. time", value: `${estMinutes} min` },
-                { label: "Elevation", value: `${Math.round(active.route.elevation_gain_m)} m` },
-              ].map((stat) => (
-                <div key={stat.label} className="rounded-control border border-hairline bg-raised py-2">
-                  <dt className="text-[10px] uppercase tracking-wider text-faint">
-                    {stat.label}
-                  </dt>
-                  <dd className="text-sm font-semibold tabular-nums text-ink">
-                    {stat.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-
-            {(subscoreFactors.length > 0 || gradeReasons.length > 0) && (
-              <div className="mt-3 rounded-control border border-hairline bg-raised p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
-                  Why this grade
-                </p>
-                {subscoreFactors.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {subscoreFactors.map((factor) => (
-                      <div key={factor.label} className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-[11px] text-muted">
-                          {factor.label}
-                        </span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                          <div
-                            className="h-full rounded-full bg-volt"
-                            style={{ width: `${Math.round(factor.value)}%` }}
-                          />
-                        </div>
-                        <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-ink">
-                          {Math.round(factor.value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {gradeReasons.length > 0 && (
-                  <ul className="mt-2 flex flex-wrap gap-1.5">
-                    {gradeReasons.map((reason, i) => (
-                      <li
-                        key={`${reason.key}-${i}`}
-                        className="rounded-full border border-hairline bg-raised px-2 py-0.5 text-[10px] font-medium text-ink"
-                      >
-                        {reason.text}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleStartRun}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98]"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                  <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
-                </svg>
-                Start run
-              </button>
-              <button
-                type="button"
-                onClick={() => setScorecardOpen(true)}
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                  <path d="M16 6l-4-4-4 4M12 2v13" />
-                </svg>
-                Share scorecard
-              </button>
-              {isAuthenticated ? (
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving || activeSaved}
-                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-control text-sm font-semibold transition ${
-                    activeSaved
-                      ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
-                      : "border border-hairline bg-raised text-ink hover:bg-raised disabled:cursor-wait disabled:opacity-70"
-                  }`}
-                >
-                  {activeSaved ? (
-                    <>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                      Saved to your account
-                    </>
-                  ) : saving ? (
-                    "Saving…"
-                  ) : (
-                    "Save this route"
-                  )}
-                </button>
-              ) : (
-                <Link
-                  href="/login?next=/"
-                  onClick={() => {
-                    if (plan) {
-                      stashGuestPlan({
-                        address,
-                        coords,
-                        distanceKm,
-                        preference,
-                        plan,
-                        activeIndex,
-                      });
-                    }
-                  }}
-                  className="flex h-10 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
-                >
-                  Sign in to save this route
-                </Link>
-              )}
-              {saveError && (
-                <p role="alert" className="mt-2 text-xs text-danger">
-                  {saveError}
-                </p>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
+      {!runMode && active && (
+        <RouteDetail
+          route={active.route}
+          candidates={plan && plan.routes.length > 1 ? plan.routes : null}
+          activeIndex={activeIndex}
+          onSelectCandidate={setActiveIndex}
+          saved={activeSaved}
+          isAuthenticated={isAuthenticated}
+          saving={saving}
+          saveError={saveError}
+          onSave={handleSave}
+          onStashPlan={() => {
+            if (!plan) return;
+            stashGuestPlan({
+              address,
+              coords,
+              distanceKm,
+              preference,
+              plan,
+              activeIndex,
+            });
+          }}
+          onStartRun={handleStartRun}
+          onShare={() => setScorecardOpen(true)}
+        />
       )}
 
       {runMode && active && (
