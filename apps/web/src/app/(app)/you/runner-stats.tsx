@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { summarizeRuns } from "@/lib/activity";
+import { ApiError } from "@/lib/api/authenticated-client";
 import { listSavedRoutes, type SavedRoute } from "@/lib/api/routes-client";
 import { listRuns, type RecordedRun } from "@/lib/api/runs-client";
 import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
@@ -25,7 +26,23 @@ import {
 type Load<T> =
   | { kind: "loading" }
   | { kind: "ready"; data: T }
-  | { kind: "error" };
+  | { kind: "error"; message: string };
+
+/**
+ * Same split the Routes tab makes: an expired session and a failing endpoint
+ * are different problems, and only one of them the runner can do anything
+ * about. Collapsing both into "we couldn't load your saved routes" sent a real
+ * outage looking like a client bug.
+ */
+function loadError(err: unknown, fallback: string): { kind: "error"; message: string } {
+  return {
+    kind: "error",
+    message:
+      err instanceof ApiError && err.status === 401
+        ? "Your session expired. Please sign in again."
+        : fallback,
+  };
+}
 
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -41,10 +58,16 @@ export function RunnerStats() {
     let cancelled = false;
     listRuns()
       .then((data) => !cancelled && setRuns({ kind: "ready", data }))
-      .catch(() => !cancelled && setRuns({ kind: "error" }));
+      .catch(
+        (err) => !cancelled && setRuns(loadError(err, "We couldn't load your totals.")),
+      );
     listSavedRoutes()
       .then((data) => !cancelled && setRoutes({ kind: "ready", data }))
-      .catch(() => !cancelled && setRoutes({ kind: "error" }));
+      .catch(
+        (err) =>
+          !cancelled &&
+          setRoutes(loadError(err, "We couldn't load your saved routes.")),
+      );
     return () => {
       cancelled = true;
     };
@@ -80,7 +103,9 @@ function Lifetime({ runs }: { runs: Load<RecordedRun[]> }) {
     <section aria-label="Lifetime totals" className="mt-8">
       <h2 className="rg-label mb-3">Lifetime</h2>
       {runs.kind === "error" ? (
-        <p className="text-sm text-muted">We couldn&apos;t load your totals.</p>
+        <p role="alert" className="text-sm text-muted">
+          {runs.message}
+        </p>
       ) : (
         <dl
           className="grid grid-cols-2 gap-px overflow-hidden rounded-card bg-hairline"
@@ -187,8 +212,8 @@ function GradeProfileSection({ routes }: { routes: Load<SavedRoute[]> }) {
     return (
       <section className="mt-8">
         <h2 className="rg-label mb-3">Route grades</h2>
-        <p className="text-sm text-muted">
-          We couldn&apos;t load your saved routes.
+        <p role="alert" className="text-sm text-muted">
+          {routes.message}
         </p>
       </section>
     );
