@@ -29,6 +29,10 @@ export async function listRuns(): Promise<RecordedRun[]> {
   return runs;
 }
 
+export async function getRun(id: string): Promise<RecordedRun> {
+  return request<RecordedRun>(`/v1/users/me/runs/${id}`);
+}
+
 export async function saveRun(
   id: string,
   payload: SaveRunPayload,
