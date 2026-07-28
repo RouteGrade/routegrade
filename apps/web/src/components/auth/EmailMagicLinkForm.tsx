@@ -50,10 +50,10 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
       <div
         role="status"
         aria-live="polite"
-        className="rounded-control border border-volt/40 bg-volt-wash p-4 text-sm text-volt"
+        className="rounded-control border border-accent/40 bg-accent-wash p-4 text-sm text-accent"
       >
         <p className="font-semibold">Check your email</p>
-        <p className="mt-1 text-xs text-volt/80">
+        <p className="mt-1 text-xs text-accent/80">
           If an account exists for that address, we&apos;ve sent a sign-in link.
         </p>
       </div>
@@ -77,7 +77,7 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="runner@example.com"
-          className="h-11 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint outline-none transition focus:border-volt"
+          className="h-11 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint outline-none transition focus:border-accent"
         />
       </div>
       <button

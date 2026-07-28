@@ -517,7 +517,7 @@ export default function RouteExplorer({
               value={startAddr}
               onChange={(e) => setStartAddr(e.target.value)}
               placeholder="Start address"
-              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-volt focus:outline-none"
+              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
             />
             {stops.map((stop, i) => (
               <div key={i} className="flex gap-2">
@@ -526,7 +526,7 @@ export default function RouteExplorer({
                   value={stop}
                   onChange={(e) => setStop(i, e.target.value)}
                   placeholder={`Stop ${i + 1}`}
-                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-volt focus:outline-none"
+                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
                 <button
                   type="button"
@@ -545,13 +545,13 @@ export default function RouteExplorer({
               value={endAddr}
               onChange={(e) => setEndAddr(e.target.value)}
               placeholder="End address"
-              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-volt focus:outline-none"
+              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
             />
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={addStop}
-                className="flex items-center gap-1.5 text-xs font-semibold text-volt transition hover:text-volt"
+                className="flex items-center gap-1.5 text-xs font-semibold text-accent transition hover:text-accent"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-3.5 w-3.5">
                   <path d="M12 5v14M5 12h14" />
@@ -564,7 +564,7 @@ export default function RouteExplorer({
                 aria-pressed={loopMode}
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
                   loopMode
-                    ? "border-volt bg-volt-wash text-volt"
+                    ? "border-accent bg-accent-wash text-accent"
                     : "border-hairline bg-raised text-ink hover:bg-raised"
                 }`}
               >
@@ -581,7 +581,7 @@ export default function RouteExplorer({
               type="button"
               onClick={buildAddressRoute}
               disabled={building}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-accent text-sm font-bold text-canvas transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
             >
               {building ? "Building…" : "Build route"}
             </button>
@@ -607,7 +607,7 @@ export default function RouteExplorer({
             {drawing ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-ink">
-                  <span className="mr-1.5 text-volt">✎</span>
+                  <span className="mr-1.5 text-accent">✎</span>
                   Drag to draw — your route snaps to the roads as you go.
                 </p>
                 <button
@@ -621,7 +621,7 @@ export default function RouteExplorer({
             ) : draw.isRouting ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="flex items-center gap-2 text-sm font-medium text-ink">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-volt">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin text-accent">
                     <path d="M21 12a9 9 0 1 1-6.2-8.56" />
                   </svg>
                   Building your route…
@@ -638,7 +638,7 @@ export default function RouteExplorer({
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-ink">Name your route</p>
-                  <span className="text-xs font-medium tabular-nums text-volt">
+                  <span className="text-xs font-medium tabular-nums text-accent">
                     {(draw.distanceMeters / 1000).toFixed(2)} km
                   </span>
                 </div>
@@ -651,7 +651,7 @@ export default function RouteExplorer({
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="My route"
                   maxLength={120}
-                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-volt focus:outline-none"
+                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
                 <div className="flex gap-2">
                   <button

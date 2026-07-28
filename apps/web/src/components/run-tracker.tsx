@@ -453,7 +453,7 @@ export default function RunTracker({
       {phase === "countdown" && (
         <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-canvas/90 backdrop-blur-sm">
           <p className="rg-label mb-3">{route.name}</p>
-          <span key={countdown} className="run-countdown rg-display text-[9rem] text-volt">
+          <span key={countdown} className="run-countdown rg-display text-[9rem] text-accent">
             {countdown === 0 ? "GO" : countdown}
           </span>
           <button type="button" onClick={onExit} className="rg-btn rg-btn-secondary mt-10">
@@ -480,13 +480,13 @@ export default function RunTracker({
               <div className="min-w-0 flex-1 rounded-full border border-hairline bg-canvas px-4 py-2">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-medium">
                   <span className="truncate text-ink">{route.name}</span>
-                  <span className="shrink-0 tabular-nums text-volt">
+                  <span className="shrink-0 tabular-nums text-accent">
                     {remainingKm.toFixed(1)} km left
                   </span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-raised">
                   <div
-                    className="h-full rounded-full bg-volt transition-[width] duration-700"
+                    className="h-full rounded-full bg-accent transition-[width] duration-700"
                     style={{ width: `${progress * 100}%` }}
                   />
                 </div>
@@ -575,7 +575,7 @@ export default function RunTracker({
                       type="button"
                       onClick={pauseRun}
                       aria-label="Pause run"
-                      className="flex h-20 w-20 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
+                      className="flex h-20 w-20 items-center justify-center rounded-full bg-accent text-canvas transition active:scale-95"
                     >
                       <svg viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
                         <rect x="6" y="5" width="4" height="14" rx="1" />
@@ -598,7 +598,7 @@ export default function RunTracker({
                         type="button"
                         onClick={resumeRun}
                         aria-label="Resume run"
-                        className="flex h-20 w-20 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
+                        className="flex h-20 w-20 items-center justify-center rounded-full bg-accent text-canvas transition active:scale-95"
                       >
                         <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-8 w-8">
                           <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
@@ -621,7 +621,7 @@ export default function RunTracker({
             <div className="pointer-events-auto absolute inset-0 flex items-end justify-center overflow-y-auto bg-canvas/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
               <section className="animate-float-in w-full max-w-md rounded-card border border-hairline bg-canvas/90 p-6 shadow-2xl shadow-black/60">
                 <header className="text-center">
-                  <p className="rg-label text-volt">Run complete</p>
+                  <p className="rg-label text-accent">Run complete</p>
                   <h2 className="rg-display mt-2 truncate text-2xl uppercase text-ink">
                     {route.name}
                   </h2>
@@ -679,7 +679,7 @@ export default function RunTracker({
                       disabled={saving || saved}
                       className={`rg-btn w-full ${
                         saved
-                          ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
+                          ? "cursor-default border border-accent/40 bg-accent-wash text-accent"
                           : "rg-btn-primary disabled:cursor-wait"
                       }`}
                     >

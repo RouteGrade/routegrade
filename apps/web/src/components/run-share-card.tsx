@@ -571,7 +571,7 @@ export function RunShareCard({ data }: { data: RunShareData }) {
           type="button"
           onClick={handleShare}
           disabled={state === "rendering"}
-          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-control bg-accent text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -603,7 +603,7 @@ export function RunShareCard({ data }: { data: RunShareData }) {
         </p>
       )}
       {state === "saved" && (
-        <p className="mt-2 text-center text-xs text-volt">
+        <p className="mt-2 text-center text-xs text-accent">
           Saved to your device.
         </p>
       )}

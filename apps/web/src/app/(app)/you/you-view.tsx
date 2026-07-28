@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { BrandLoader } from "@/components/brand/brand-loader";
 import {
   ApiError,
   provisionCurrentUser,
@@ -79,7 +80,7 @@ export function YouView() {
   }
 
   if (state.kind === "loading") {
-    return <p className="text-sm text-muted">Loading your profile…</p>;
+    return <BrandLoader label="Loading your profile" />;
   }
 
   if (state.kind === "error") {
@@ -112,7 +113,7 @@ export function YouView() {
         ) : (
           <div
             aria-hidden="true"
-            className="rg-display flex h-16 w-16 items-center justify-center rounded-full bg-volt text-2xl text-canvas"
+            className="rg-display flex h-16 w-16 items-center justify-center rounded-full bg-accent text-2xl text-canvas"
           >
             {(profile.display_name ?? profile.email).slice(0, 1).toUpperCase()}
           </div>
@@ -139,7 +140,7 @@ export function YouView() {
             maxLength={80}
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            className="h-13 rounded-control border border-hairline bg-surface px-4 text-base text-ink outline-none transition-colors placeholder:text-faint focus:border-volt"
+            className="h-13 rounded-control border border-hairline bg-surface px-4 text-base text-ink outline-none transition-colors placeholder:text-faint focus:border-accent"
           />
           <button
             type="submit"

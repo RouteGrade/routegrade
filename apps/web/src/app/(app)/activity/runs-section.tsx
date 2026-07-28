@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BrandLoader } from "@/components/brand/brand-loader";
 import { EmptyState } from "@/components/shell/screen";
 import {
   PERIOD_LABEL,
@@ -72,7 +73,7 @@ export function RunsSection() {
   }
 
   if (state.kind === "loading") {
-    return <p className="text-sm text-muted">Loading your runs…</p>;
+    return <BrandLoader label="Loading your runs" />;
   }
 
   if (state.kind === "error") {
@@ -118,7 +119,7 @@ export function RunsSection() {
               onClick={() => setPeriod(option)}
               className={`rg-label flex-1 rounded-[10px] py-2.5 transition-colors ${
                 option === period
-                  ? "bg-volt text-canvas"
+                  ? "bg-accent text-canvas"
                   : "text-muted hover:text-ink"
               }`}
             >

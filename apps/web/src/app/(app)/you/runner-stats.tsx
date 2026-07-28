@@ -206,7 +206,7 @@ function GradeProfileSection({ routes }: { routes: Load<SavedRoute[]> }) {
       <h2 className="rg-label mb-3">Route grades</h2>
       <div className="rounded-card border border-hairline bg-surface p-5">
         <div className="flex items-center gap-4">
-          <span className="rg-display flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-volt text-2xl text-canvas">
+          <span className="rg-display flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-2xl text-canvas">
             {profile.commonestGrade}
           </span>
           <div className="min-w-0">
@@ -232,7 +232,7 @@ function GradeProfileSection({ routes }: { routes: Load<SavedRoute[]> }) {
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-raised">
                 <div
                   aria-hidden="true"
-                  className="h-full rounded-full bg-volt"
+                  className="h-full rounded-full bg-accent"
                   style={{
                     width: `${mostCounted > 0 ? (profile.counts[grade] / mostCounted) * 100 : 0}%`,
                   }}
