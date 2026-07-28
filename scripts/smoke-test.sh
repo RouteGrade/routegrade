@@ -219,37 +219,63 @@ else
 fi
 
 # ---- 8. Rate-limit behavior on /v1/routes/plan ----
-# The API code (plans.py + core/rate_limit.py) sets Retry-After ONLY on the 429
-# response — normal 200s have no rate-limit headers. Verify the limiter is
-# actually wired by bursting fast requests until we see a 429 with Retry-After.
-# The 429 is returned by the dependency BEFORE any provider call, so it is fast.
+# The API sets Retry-After ONLY on the 429 (plans.py + core/rate_limit.py), so
+# the way to prove the limiter is wired is to actually trip it.
+#
+# This check reported a false FAIL from whenever it was written until
+# 2026-07-28, for two independent reasons — both about the shape of the burst,
+# neither about the limiter, which measurement showed was live and correct all
+# along (20 parallel requests return exactly 15x200 + 5x429, matching the
+# configured 10/min + 5 burst):
+#
+#   1. It used `--max-time 4`, but a real /v1/routes/plan takes ~9s because it
+#      fans out to Nominatim + OSRM + Open-Elevation. Every request aborted
+#      client-side and was recorded as "000", so the loop never saw ANY status
+#      code, let alone a 429.
+#   2. It fired sequentially. Even with a generous timeout, 25 requests at ~9s
+#      each span ~225s, and the bucket refills 10/min — roughly 37 tokens over
+#      that window. A sequential burst can never outpace the refill, so it can
+#      never empty the bucket.
+#
+# Hence: parallel, with a timeout longer than the endpoint's real latency. The
+# 429s come back fast (the dependency rejects before any provider call); it is
+# the 200s that are slow, and those are exactly what has to overlap.
 echo "${C_BOLD}[api]${C_OFF} rate limiter"
-RL_TRIPPED=false
+RL_BURST=20
+RL_DIR="$TMP/ratelimit"
+mkdir -p "$RL_DIR"
+for i in $(seq 1 "$RL_BURST"); do
+  (
+    code=$(curl -sS -o /dev/null -D "$RL_DIR/$i.headers" -w "%{http_code}" --max-time 25 \
+      -H "Content-Type: application/json" \
+      -X POST "$API_ORIGIN/v1/routes/plan" \
+      --data "$PLAN_REQ" 2>/dev/null || echo "000")
+    printf "%s" "$code" > "$RL_DIR/$i.code"
+  ) &
+done
+wait
+
+RL_429_COUNT=0
 RL_HAS_RETRY_AFTER=false
-for i in $(seq 1 25); do
-  RL_HEADERS="$TMP/rl-$i.headers"
-  RL_CODE=$(curl -sS -o /dev/null -D "$RL_HEADERS" -w "%{http_code}" --max-time 4 \
-    -H "Content-Type: application/json" \
-    -X POST "$API_ORIGIN/v1/routes/plan" \
-    --data "$PLAN_REQ" 2>/dev/null || echo "000")
-  if [[ "$RL_CODE" == "429" ]]; then
-    RL_TRIPPED=true
-    if grep -qi "^retry-after:" "$RL_HEADERS"; then
-      RL_HAS_RETRY_AFTER=true
-    fi
-    break
+for i in $(seq 1 "$RL_BURST"); do
+  [[ -f "$RL_DIR/$i.code" ]] || continue
+  if [[ "$(cat "$RL_DIR/$i.code")" == "429" ]]; then
+    RL_429_COUNT=$((RL_429_COUNT + 1))
+    if grep -qi "^retry-after:" "$RL_DIR/$i.headers"; then RL_HAS_RETRY_AFTER=true; fi
   fi
 done
-if [[ "$RL_TRIPPED" == "true" && "$RL_HAS_RETRY_AFTER" == "true" ]]; then
-  pass "POST /v1/routes/plan trips 429 with Retry-After header (rate limiter live)"
-elif [[ "$RL_TRIPPED" == "true" ]]; then
+RL_CODES=$(cat "$RL_DIR"/*.code 2>/dev/null | sort | uniq -c | tr '\n' ' ')
+
+if [[ "$RL_429_COUNT" -gt 0 && "$RL_HAS_RETRY_AFTER" == "true" ]]; then
+  pass "POST /v1/routes/plan trips 429 with Retry-After ($RL_429_COUNT of $RL_BURST limited)"
+elif [[ "$RL_429_COUNT" -gt 0 ]]; then
   fail "429 response includes Retry-After header" \
-       "got 429 without Retry-After" \
+       "got $RL_429_COUNT 429s, none carrying Retry-After" \
        "limiter is firing but not returning Retry-After — check app/api/routes/plans.py enforce_plan_rate_limit"
 else
   fail "POST /v1/routes/plan rate limit is wired" \
-       "burst of 25 requests never returned 429" \
-       "rate limiter disabled or per-instance limit far too generous — check ROUTE_PLAN_RATE_LIMIT_PER_MINUTE in Vercel env"
+       "parallel burst of $RL_BURST never returned 429 (codes: $RL_CODES)" \
+       "if these are all 000 the endpoint got slower than the 25s timeout; otherwise check ROUTE_PLAN_RATE_LIMIT_PER_MINUTE (0 disables limiting) in the Vercel routegrade-api env"
 fi
 
 # ---- 9. CORS preflight OPTIONS on /v1/routes/plan ----
