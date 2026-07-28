@@ -119,7 +119,7 @@ export function PlannerHero({
             onClick={onLocate}
             disabled={locating}
             aria-label="Use my location"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-volt transition-colors hover:bg-raised disabled:opacity-60"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-accent transition-colors hover:bg-raised disabled:opacity-60"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-5 w-5 ${locating ? "animate-spin" : ""}`}>
               <circle cx="12" cy="12" r="3" />
@@ -161,7 +161,7 @@ export function PlannerHero({
             onClick={onFind}
             disabled={searching}
             aria-label="Find routes"
-            className="flex h-32 w-32 items-center justify-center rounded-full bg-volt transition active:scale-95 disabled:opacity-70"
+            className="flex h-32 w-32 items-center justify-center rounded-full bg-accent transition active:scale-95 disabled:opacity-70"
           >
             {searching ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-9 w-9 animate-spin text-canvas">
@@ -216,7 +216,7 @@ export function PlannerHero({
                 <label htmlFor="distance" className="rg-label">
                   Distance
                 </label>
-                <span className="rg-metric text-3xl text-volt">
+                <span className="rg-metric text-3xl text-accent">
                   {distanceKm.toFixed(1)}
                   <span className="ml-1 text-base text-muted">km</span>
                 </span>
@@ -251,7 +251,7 @@ export function PlannerHero({
                     onClick={() => onPreferenceChange(option.id)}
                     className={`flex h-20 flex-col items-center justify-center gap-2 rounded-control border text-xs font-bold uppercase tracking-wider transition-colors ${
                       selected
-                        ? "border-volt bg-volt-wash text-volt"
+                        ? "border-accent bg-accent-wash text-accent"
                         : "border-hairline text-muted hover:border-hairline-strong hover:text-ink"
                     }`}
                   >

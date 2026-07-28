@@ -114,7 +114,7 @@ export function TabBar() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={`flex h-full flex-col items-center justify-center gap-1 transition-colors ${
-                  active ? "text-volt" : "text-faint hover:text-muted"
+                  active ? "text-accent" : "text-faint hover:text-muted"
                 }`}
               >
                 {tab.icon(active)}

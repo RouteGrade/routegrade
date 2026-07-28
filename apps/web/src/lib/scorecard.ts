@@ -43,8 +43,15 @@ export type GradeMeta = {
 };
 
 // An ordered scale, not decoration: the hue carries the grade, so it stays a
-// monotonic volt -> amber -> red ramp. A lands on the brand accent, which makes
-// the best grade and the app's primary action read as the same "good" colour.
+// monotonic green -> amber -> red ramp.
+//
+// This ramp is deliberately NOT tied to the brand accent. It used to be — grade
+// A was the accent lime, so "best grade" and "primary action" were one colour —
+// but the accent is now the logo's cyan, and cyan does not read as "good" on a
+// good-to-bad scale the way green does. Grades are a semantic scale first and
+// branding second, so the ramp keeps its meaning and the accent goes its own
+// way. Changing A to cyan would break the warmth progression that makes the
+// scale legible without reading the letter.
 export const GRADE_META: Record<Grade, GradeMeta> = {
   A: {
     label: "Excellent run",

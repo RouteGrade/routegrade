@@ -224,7 +224,7 @@ export default function RouteMap({
       }
       const el = document.createElement("div");
       el.className =
-        "h-3.5 w-3.5 cursor-grab rounded-full border-2 border-canvas bg-volt active:cursor-grabbing";
+        "h-3.5 w-3.5 cursor-grab rounded-full border-2 border-canvas bg-accent active:cursor-grabbing";
       const marker = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat(wp.lngLat)
         .addTo(map);
@@ -335,7 +335,7 @@ export default function RouteMap({
           visibility: "none",
         },
         paint: {
-          "line-color": "#d8ff3e",
+          "line-color": "#18ccd4",
           "line-width": 14,
           "line-opacity": 0.35,
           "line-blur": 6,
@@ -358,11 +358,11 @@ export default function RouteMap({
             ["linear"],
             ["line-progress"],
             0,
-            "#9fbb2c",
+            "#12969c",
             0.5,
             "#c8f03a",
             1,
-            "#d8ff3e",
+            "#18ccd4",
           ],
         },
       });
@@ -380,8 +380,8 @@ export default function RouteMap({
           visibility: "none",
         },
         paint: {
-          // Muted, not volt: during a run this is the *untraveled* remainder,
-          // and the volt `traveled` overlay on top of it has to be the loud one.
+          // Muted, not accent: during a run this is the *untraveled* remainder,
+          // and the accent `traveled` overlay on top of it has to be the loud one.
           "line-color": "#8c8c8c",
           "line-width": 4.5,
           "line-opacity": 0.55,
@@ -398,7 +398,7 @@ export default function RouteMap({
         source: TRAVELED_SOURCE,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#d8ff3e",
+          "line-color": "#18ccd4",
           "line-width": 5,
           "line-opacity": 0.9,
         },
@@ -940,7 +940,7 @@ export default function RouteMap({
         <button
           type="button"
           onClick={handleRecenter}
-          className="absolute bottom-56 right-3 z-10 flex items-center gap-1.5 rounded-full border border-hairline bg-surface px-3.5 py-2 text-xs font-semibold text-volt shadow-lg shadow-black/50 transition hover:bg-raised sm:bottom-8"
+          className="absolute bottom-56 right-3 z-10 flex items-center gap-1.5 rounded-full border border-hairline bg-surface px-3.5 py-2 text-xs font-semibold text-accent shadow-lg shadow-black/50 transition hover:bg-raised sm:bottom-8"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5">
             <circle cx="12" cy="12" r="3" />

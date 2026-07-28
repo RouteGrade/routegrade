@@ -83,7 +83,7 @@ export function RouteDetail({
                 onClick={() => onSelectCandidate(index)}
                 className={`flex-1 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                   index === activeIndex
-                    ? "border-volt bg-volt-wash text-volt"
+                    ? "border-accent bg-accent-wash text-accent"
                     : "border-hairline text-muted hover:border-hairline-strong hover:text-ink"
                 }`}
               >
@@ -96,7 +96,7 @@ export function RouteDetail({
         {/* The grade, loudest thing on the screen. */}
         <div className="flex items-center gap-5">
           <span
-            className="rg-display text-[88px] leading-[0.8] text-volt"
+            className="rg-display text-[88px] leading-[0.8] text-accent"
             style={meta ? { color: meta.hexFrom } : undefined}
           >
             {route.grade}
@@ -116,7 +116,7 @@ export function RouteDetail({
             {route.name}
           </h2>
           {route.provider === "saved" ? (
-            <span className="shrink-0 rounded-full border border-volt/40 bg-volt-wash px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-volt">
+            <span className="shrink-0 rounded-full border border-accent/40 bg-accent-wash px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-accent">
               Saved
             </span>
           ) : !route.within_tolerance ? (
@@ -159,7 +159,7 @@ export function RouteDetail({
                     </span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                       <div
-                        className="h-full rounded-full bg-volt"
+                        className="h-full rounded-full bg-accent"
                         style={{ width: `${Math.round(factor.value)}%` }}
                       />
                     </div>
@@ -206,7 +206,7 @@ export function RouteDetail({
               disabled={saving || saved}
               className={`rg-btn flex-1 ${
                 saved
-                  ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
+                  ? "cursor-default border border-accent/40 bg-accent-wash text-accent"
                   : "rg-btn-secondary disabled:cursor-wait"
               }`}
             >

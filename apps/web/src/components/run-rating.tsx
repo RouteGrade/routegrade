@@ -47,7 +47,7 @@ function StarButton({
       <svg
         viewBox="0 0 24 24"
         className={`h-8 w-8 transition-colors ${
-          filled ? "text-volt" : "text-faint"
+          filled ? "text-accent" : "text-faint"
         }`}
         fill={filled ? "currentColor" : "none"}
         stroke="currentColor"
@@ -117,7 +117,7 @@ export function RunRating({
                     }
                     className={`rounded-lg border px-1.5 py-2 text-[11px] font-semibold leading-tight transition ${
                       selected
-                        ? "border-volt bg-volt-wash text-volt"
+                        ? "border-accent bg-accent-wash text-accent"
                         : "border-hairline bg-raised text-muted hover:bg-raised"
                     }`}
                   >
@@ -145,7 +145,7 @@ export function RunRating({
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                       selected
                         ? tag.positive
-                          ? "border-volt bg-volt-wash text-volt"
+                          ? "border-accent bg-accent-wash text-accent"
                           : "border-amber-400/50 bg-amber-400/15 text-muted"
                         : "border-hairline bg-raised text-muted hover:bg-raised"
                     }`}
