@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/shell/screen";
 import { summarizeRuns } from "@/lib/activity";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { deleteRun, listRuns, type RecordedRun } from "@/lib/api/runs-client";
-import { formatDuration, formatPace } from "@/lib/geo";
+import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
 
 type LoadState =
   | { kind: "loading" }
@@ -101,7 +101,9 @@ export function RunsSection() {
         <dl className="mt-6 grid grid-cols-3 gap-3 border-t border-hairline pt-5">
           {[
             { label: "Runs", value: String(totals.runs) },
-            { label: "Time", value: formatDuration(totals.durationS) },
+            // A lifetime figure, so hours-and-minutes rather than a stopwatch
+            // reading — and the same rendering as the You tab's Time tile.
+            { label: "Time", value: formatTotalTime(totals.durationS) },
             {
               label: "Avg pace",
               value:
