@@ -452,20 +452,11 @@ export default function RunTracker({
       {/* Countdown takes the whole stage, NRC style */}
       {phase === "countdown" && (
         <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-canvas/90 backdrop-blur-sm">
-          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-muted">
-            {route.name}
-          </p>
-          <span
-            key={countdown}
-            className="run-countdown font-display text-[9rem] font-extrabold leading-none text-volt"
-          >
+          <p className="rg-label mb-3">{route.name}</p>
+          <span key={countdown} className="run-countdown rg-display text-[9rem] text-volt">
             {countdown === 0 ? "GO" : countdown}
           </span>
-          <button
-            type="button"
-            onClick={onExit}
-            className="mt-10 rounded-full border border-white/15 bg-raised px-5 py-2 text-sm font-medium text-ink transition hover:bg-raised"
-          >
+          <button type="button" onClick={onExit} className="rg-btn rg-btn-secondary mt-10">
             Cancel
           </button>
         </div>
@@ -523,13 +514,16 @@ export default function RunTracker({
               </button>
             </div>
 
+            {/* Two different states, two different jobs: a GPS problem is
+                something to know about, being off route is something to act on,
+                so only the latter takes the reserved danger colour. */}
             {(offRoute || gpsError) && phase !== "finished" && (
               <div
                 role="alert"
-                className={`mx-auto mt-2 w-fit max-w-md rounded-full border px-4 py-1.5 text-xs font-semibold  ${
+                className={`mx-auto mt-2 w-fit max-w-md rounded-full border px-4 py-1.5 text-xs font-semibold ${
                   gpsError
-                    ? "border-amber-400/30 bg-amber-400/15 text-muted"
-                    : "border-rose-500/30 bg-rose-500/15 text-rose-300"
+                    ? "border-hairline-strong bg-raised text-muted"
+                    : "border-danger/30 bg-danger-wash text-danger"
                 }`}
               >
                 {gpsError ?? "Off route — head back to the highlighted path"}
@@ -540,38 +534,50 @@ export default function RunTracker({
           {/* Live stats + controls */}
           {phase !== "finished" && (
             <div className="pointer-events-auto absolute inset-x-0 bottom-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-              <div className="mx-auto max-w-md rounded-3xl border border-hairline bg-surface p-5 shadow-2xl shadow-black/60">
+              <div className="mx-auto max-w-md rounded-card border border-hairline bg-surface p-6 shadow-2xl shadow-black/60">
+                {/* One figure owns the screen. Distance is the metric a runner
+                    glances down at mid-stride, so it gets the size and the rest
+                    of the panel is deliberately quieter. */}
                 <div className="text-center">
-                  <span className="font-display text-6xl font-extrabold tabular-nums tracking-tight text-ink">
+                  <span
+                    data-testid="run-distance"
+                    className="rg-metric text-[88px] text-ink"
+                  >
                     {km.toFixed(2)}
                   </span>
-                  <span className="ml-2 text-sm font-semibold uppercase tracking-widest text-faint">
-                    km
-                  </span>
+                  <span className="rg-label ml-2">km</span>
                 </div>
 
-                <dl className="mt-4 grid grid-cols-3 gap-1.5 text-center">
+                {/* No boxes: at a glance the eye needs the numbers, and three
+                    bordered tiles compete with the figure above them. */}
+                <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-hairline pt-4 text-center">
                   {[
+                    // "Avg pace" and "Pace" rather than the Activity tab's
+                    // "Pace /km" label with a bare figure: mid-run these two sit
+                    // side by side, and telling the average from the current one
+                    // matters more here than a tidy unit-free number column.
                     { label: "Time", value: formatDuration(elapsedS) },
                     { label: "Avg pace", value: `${formatPace(avgPaceS)} /km` },
                     { label: "Pace", value: `${formatPace(currentPaceS)} /km` },
                   ].map((stat) => (
-                    <div key={stat.label} className="rounded-control border border-hairline bg-raised py-2">
-                      <dt className="text-[10px] uppercase tracking-wider text-faint">{stat.label}</dt>
-                      <dd className="text-sm font-semibold tabular-nums text-ink">{stat.value}</dd>
+                    <div key={stat.label} className="flex flex-col-reverse">
+                      <dt className="rg-label mt-1.5">{stat.label}</dt>
+                      <dd className="rg-metric text-xl text-ink">{stat.value}</dd>
                     </div>
                   ))}
                 </dl>
 
-                <div className="mt-4 flex items-center justify-center gap-3">
+                {/* 80px targets: this is pressed mid-run, one-thumbed, often in
+                    the rain. Well above the 44px floor the rest of the app uses. */}
+                <div className="mt-6 flex items-center justify-center gap-4">
                   {phase === "running" ? (
                     <button
                       type="button"
                       onClick={pauseRun}
                       aria-label="Pause run"
-                      className="flex h-16 w-16 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
+                      className="flex h-20 w-20 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
                     >
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
                         <rect x="6" y="5" width="4" height="14" rx="1" />
                         <rect x="14" y="5" width="4" height="14" rx="1" />
                       </svg>
@@ -582,9 +588,9 @@ export default function RunTracker({
                         type="button"
                         onClick={finishRun}
                         aria-label="Finish run"
-                        className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-rose-500/60 bg-rose-500/15 text-rose-300 transition hover:bg-rose-500/25 active:scale-95"
+                        className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-danger/50 bg-danger-wash text-danger transition hover:bg-danger/25 active:scale-95"
                       >
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7">
                           <rect x="6" y="6" width="12" height="12" rx="1.5" />
                         </svg>
                       </button>
@@ -592,9 +598,9 @@ export default function RunTracker({
                         type="button"
                         onClick={resumeRun}
                         aria-label="Resume run"
-                        className="flex h-16 w-16 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
+                        className="flex h-20 w-20 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
                       >
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-6 w-6">
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-8 w-8">
                           <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
                         </svg>
                       </button>
@@ -602,7 +608,7 @@ export default function RunTracker({
                   )}
                 </div>
                 {phase === "paused" && (
-                  <p className="mt-2 text-center text-[11px] text-faint">
+                  <p className="rg-label mt-3 text-center">
                     Paused — press stop to finish your run
                   </p>
                 )}
@@ -613,12 +619,10 @@ export default function RunTracker({
           {/* Summary */}
           {phase === "finished" && (
             <div className="pointer-events-auto absolute inset-0 flex items-end justify-center overflow-y-auto bg-canvas/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
-              <section className="animate-float-in w-full max-w-md rounded-3xl border border-hairline bg-canvas/90 p-6 shadow-2xl shadow-black/60">
+              <section className="animate-float-in w-full max-w-md rounded-card border border-hairline bg-canvas/90 p-6 shadow-2xl shadow-black/60">
                 <header className="text-center">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-volt">
-                    Run complete
-                  </p>
-                  <h2 className="mt-1 truncate font-display text-lg font-bold text-ink">
+                  <p className="rg-label text-volt">Run complete</p>
+                  <h2 className="rg-display mt-2 truncate text-2xl uppercase text-ink">
                     {route.name}
                   </h2>
                 </header>
@@ -644,17 +648,15 @@ export default function RunTracker({
 
                 {splits.length > 0 && (
                   <div className="mt-4">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                      Splits
-                    </h3>
-                    <ul className="mt-1.5 max-h-36 overflow-y-auto rounded-control border border-hairline bg-raised">
+                    <h3 className="rg-label mb-1.5">Splits</h3>
+                    <ul className="max-h-36 overflow-y-auto rounded-control border border-hairline bg-raised">
                       {splits.map((split) => (
                         <li
                           key={split.km}
-                          className="flex items-center justify-between border-b border-hairline px-3 py-1.5 text-xs last:border-b-0"
+                          className="flex items-center justify-between border-b border-hairline px-3 py-2 text-xs last:border-b-0"
                         >
                           <span className="text-muted">km {split.km}</span>
-                          <span className="font-semibold tabular-nums text-ink">
+                          <span className="rg-metric text-sm text-ink">
                             {formatPace(split.duration_s)}
                           </span>
                         </li>
@@ -675,10 +677,10 @@ export default function RunTracker({
                       type="button"
                       onClick={handleSave}
                       disabled={saving || saved}
-                      className={`flex h-11 w-full items-center justify-center gap-2 rounded-control text-sm font-bold transition ${
+                      className={`rg-btn w-full ${
                         saved
                           ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
-                          : "bg-volt text-canvas  hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                          : "rg-btn-primary disabled:cursor-wait"
                       }`}
                     >
                       {saved ? (
@@ -697,10 +699,7 @@ export default function RunTracker({
                       )}
                     </button>
                   ) : (
-                    <Link
-                      href="/login?next=/"
-                      className="flex h-11 w-full items-center justify-center rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
-                    >
+                    <Link href="/login?next=/" className="rg-btn rg-btn-secondary w-full">
                       Sign in to save &amp; rate this run
                     </Link>
                   )}
@@ -712,7 +711,7 @@ export default function RunTracker({
                   <button
                     type="button"
                     onClick={onExit}
-                    className="flex h-11 w-full items-center justify-center rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
+                    className="rg-btn rg-btn-secondary w-full"
                   >
                     Done
                   </button>
