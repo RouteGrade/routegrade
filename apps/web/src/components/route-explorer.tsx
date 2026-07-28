@@ -21,7 +21,7 @@ import {
 import { deriveReasons } from "@/lib/scorecard";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { useImmersive } from "./shell/app-shell";
-import { RouteGradeLogo } from "./brand/route-grade-logo";
+import { PlannerHero } from "./run-tab/planner-hero";
 import { RouteScorecard } from "./route-scorecard";
 import RunTracker, { primeSpeech } from "./run-tracker";
 import type { RunTelemetry } from "./run-tracker";
@@ -80,61 +80,6 @@ function takeGuestPlan(): GuestPlanStash | null {
   }
 }
 
-const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = [
-  {
-    id: "quiet",
-    label: "Quiet",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <path d="M11 5 6 9H2v6h4l5 4z" />
-        <line x1="22" x2="16" y1="9" y2="15" />
-        <line x1="16" x2="22" y1="9" y2="15" />
-      </svg>
-    ),
-  },
-  {
-    id: "flat",
-    label: "Flat",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <path d="M2 12h20" />
-        <path d="M2 17h20" />
-        <path d="M2 7h20" />
-      </svg>
-    ),
-  },
-  {
-    id: "scenic",
-    label: "Scenic",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
-        <circle cx="19" cy="5" r="1" />
-      </svg>
-    ),
-  },
-];
-
-function StatusPill({ status }: { status: ApiStatus }) {
-  const config = {
-    checking: { dot: "bg-muted", ring: "bg-muted/40", label: "Checking API…" },
-    online: { dot: "bg-volt", ring: "bg-volt/40", label: "API connected" },
-    offline: { dot: "bg-danger", ring: "bg-danger/40", label: "API offline" },
-  }[status];
-
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-raised px-2.5 py-1 text-[11px] font-medium text-ink">
-      <span className="relative flex h-2 w-2">
-        {status !== "offline" && (
-          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${config.ring}`} />
-        )}
-        <span className={`relative inline-flex h-2 w-2 rounded-full ${config.dot}`} />
-      </span>
-      {config.label}
-    </span>
-  );
-}
-
 function GradeBadge({ grade }: { grade: string }) {
   return (
     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-volt font-display text-lg font-extrabold text-canvas">
@@ -180,9 +125,6 @@ export default function RouteExplorer({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reopened, setReopened] = useState<ActiveRoute | null>(null);
-  // Mobile-only: the planner form collapses into a bottom-sheet header so the
-  // map stays visible. Ignored on sm+ where the form is always shown.
-  const [formOpen, setFormOpen] = useState(!startInBuilderMode);
   // Shelved freehand draw mode (behind ROUTE_DRAW_ENABLED). The structured
   // route state (waypoints + segments, undo/redo, draggable markers) is reused
   // by the address-based multi-stop builder below.
@@ -265,9 +207,6 @@ export default function RouteExplorer({
         setDistanceKm(Math.min(15, Math.max(1, Math.round(saved.distance_km * 2) / 2)));
         setPreference(saved.preference);
         setSavedIds((prev) => new Set(prev).add(saved.id));
-        if (window.matchMedia("(max-width: 639px)").matches) {
-          setFormOpen(false);
-        }
       } catch {
         // Deleted or someone else's link — quietly fall back to a fresh planner.
       }
@@ -293,7 +232,6 @@ export default function RouteExplorer({
       setPreference(stash.preference);
       setPlan(stash.plan);
       setActiveIndex(stash.activeIndex);
-      if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
     }, 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -328,15 +266,19 @@ export default function RouteExplorer({
   );
   const mapGeometry = plan ? activeGeometry : (drawnGeometry ?? activeGeometry);
 
-  const startDrawing = () => {
+  // NOTE: the shelved freehand draw tool (ROUTE_DRAW_ENABLED) no longer has an
+  // entry point. Its old "Draw your own route" button lived in the planner form
+  // this tab replaced, so re-enabling the flag now also means adding a way in —
+  // everything downstream of that (the draw overlay, lib/route-draw, /nearest,
+  // /segment) is still here and still wired up.
+
+  /** Drop the current result and return to the idle Run tab. */
+  const clearActiveRoute = () => {
     setPlan(null);
     setReopened(null);
     setPlanError(null);
+    setSaveError(null);
     draw.clear();
-    setDrawError(null);
-    setCustomName("");
-    setDrawing(true);
-    if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
   };
 
   const cancelDrawing = () => {
@@ -355,7 +297,6 @@ export default function RouteExplorer({
     setBuilderError(null);
     setCustomName("");
     setBuilderOpen(true);
-    if (window.matchMedia("(max-width: 639px)").matches) setFormOpen(false);
   };
 
   const addStop = () => setStops((s) => [...s, ""]);
@@ -491,10 +432,6 @@ export default function RouteExplorer({
       setPlan(response);
       setActiveIndex(0);
       setReopened(null);
-      // On phones, tuck the form away so the map and result take the stage.
-      if (window.matchMedia("(max-width: 639px)").matches) {
-        setFormOpen(false);
-      }
     } catch (err) {
       setPlan(null);
       if (err instanceof ApiError && err.status === 404) {
@@ -539,7 +476,6 @@ export default function RouteExplorer({
     }
   };
 
-  const sliderProgress = ((distanceKm - 1) / (15 - 1)) * 100;
   const activeSaved = active ? active.saved || savedIds.has(active.route.id) : false;
   const estMinutes = active ? Math.round(active.route.distance_km * PACE_MIN_PER_KM) : 0;
   const gradeReasons = active ? deriveReasons(active.route) : [];
@@ -799,219 +735,47 @@ export default function RouteExplorer({
         </div>
       )}
 
-      {/* Vignettes for legibility — top on desktop, bottom behind the mobile sheet */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-36 bg-linear-to-b from-canvas/80 to-transparent sm:block" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-linear-to-t from-canvas/80 to-transparent sm:hidden" />
+      {/* Idle Run tab: search pill, run goal, and one primary action over a
+          full-bleed map. Hidden as soon as there is something to show. */}
+      {!runMode && !active && !builderOpen && !draw.hasRoute && !draw.isRouting && (
+        <PlannerHero
+          address={address}
+          onAddressChange={(value) => {
+            setAddress(value);
+            setCoords(null);
+          }}
+          onLocate={handleUseMyLocation}
+          locating={locating}
+          distanceKm={distanceKm}
+          onDistanceChange={setDistanceKm}
+          preference={preference}
+          onPreferenceChange={setPreference}
+          searching={searching}
+          onFind={handleFindRoutes}
+          onOpenBuilder={openBuilder}
+          planError={planError}
+          apiOffline={apiStatus === "offline"}
+        />
+      )}
 
-      {/* Bottom sheet on phones (results stacked above the controls),
-          fixed left column on sm+. Hidden entirely while a run is live. */}
+      {/* The hero (and with it the search field) yields the screen to a result,
+          so a result needs its own way back — otherwise the only route out of a
+          plan is switching tabs. */}
+      {!runMode && active && (
+        <button
+          type="button"
+          onClick={clearActiveRoute}
+          aria-label="Back to search"
+          className="absolute left-4 top-[calc(1rem+env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-full border border-hairline bg-surface text-ink transition-colors hover:bg-raised"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+      )}
+
       {!runMode && (
-      <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col-reverse gap-2 overflow-y-auto p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100dvh-2.5rem)] sm:w-[380px] sm:flex-col sm:gap-3 sm:p-0">
-        {/* Control card */}
-        <section className="rounded-card border border-hairline bg-surface p-4 shadow-2xl shadow-black/60 sm:p-5">
-          <header
-            className={`flex items-center justify-between gap-3 ${formOpen ? "mb-5" : "mb-0"} sm:mb-5 sm:items-start`}
-          >
-            <RouteGradeLogo tagline />
-            <div className="flex items-center gap-2">
-              <StatusPill status={apiStatus} />
-              <button
-                type="button"
-                onClick={() => setFormOpen((open) => !open)}
-                aria-expanded={formOpen}
-                aria-controls="planner-form"
-                aria-label={formOpen ? "Hide route options" : "Show route options"}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-hairline bg-raised text-ink transition hover:bg-raised sm:hidden"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`h-4 w-4 transition-transform duration-300 ${formOpen ? "rotate-180" : ""}`}
-                >
-                  <path d="m6 15 6-6 6 6" />
-                </svg>
-              </button>
-            </div>
-          </header>
-
-          <form
-            id="planner-form"
-            onSubmit={handleFindRoutes}
-            className={`flex-col gap-4 ${formOpen ? "flex" : "hidden"} sm:flex`}
-          >
-            <div>
-              <label
-                htmlFor="start-address"
-                className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted"
-              >
-                Starting point
-              </label>
-              <div className="relative">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint">
-                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-                <input
-                  id="start-address"
-                  type="text"
-                  value={address}
-                  onChange={(e) => {
-                    setAddress(e.target.value);
-                    setCoords(null);
-                  }}
-                  placeholder="Nathan Phillips Square, Toronto"
-                  className="h-11 w-full rounded-control border border-hairline bg-raised pl-9 pr-3 text-base text-ink placeholder:text-faint outline-none transition focus:border-volt sm:text-sm"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleUseMyLocation}
-                disabled={locating}
-                className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-volt transition hover:text-volt disabled:opacity-60"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`h-3.5 w-3.5 ${locating ? "animate-spin" : ""}`}>
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-                </svg>
-                {locating ? "Locating…" : "Use my location"}
-              </button>
-            </div>
-
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label
-                  htmlFor="distance"
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted"
-                >
-                  Distance
-                </label>
-                <span className="rounded-md bg-volt-wash px-2 py-0.5 text-xs font-semibold tabular-nums text-volt">
-                  {distanceKm.toFixed(1)} km
-                </span>
-              </div>
-              <input
-                id="distance"
-                type="range"
-                min={1}
-                max={15}
-                step={0.5}
-                value={distanceKm}
-                onChange={(e) => setDistanceKm(Number(e.target.value))}
-                className="rg-slider"
-                style={{ "--slider-progress": `${sliderProgress}%` } as React.CSSProperties}
-              />
-              <div className="mt-1 flex justify-between text-[10px] text-faint">
-                <span>1 km</span>
-                <span>15 km</span>
-              </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted">
-                Vibe
-              </span>
-              <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Route preference">
-                {PREFERENCES.map((option) => {
-                  const selected = preference === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setPreference(option.id)}
-                      className={`flex h-14 flex-col items-center justify-center gap-1 rounded-control border text-xs font-medium transition ${
-                        selected
-                          ? "border-volt bg-volt-wash text-volt "
-                          : "border-hairline bg-raised text-muted hover:border-hairline-strong hover:bg-raised hover:text-ink"
-                      }`}
-                    >
-                      {option.icon}
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={searching}
-              className="group relative mt-1 flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-80"
-            >
-              {searching ? (
-                <>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="h-4 w-4 animate-spin">
-                    <path d="M21 12a9 9 0 1 1-6.2-8.56" />
-                  </svg>
-                  Grading routes…
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 transition-transform group-hover:scale-110">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.3-4.3" />
-                  </svg>
-                  Find routes
-                </>
-              )}
-            </button>
-
-            {planError && (
-              <p role="alert" className="text-xs text-danger">
-                {planError}
-              </p>
-            )}
-
-            {ROUTE_DRAW_ENABLED && (
-              <>
-                <div className="flex items-center gap-3">
-                  <span className="h-px flex-1 bg-raised" />
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-faint">
-                    or
-                  </span>
-                  <span className="h-px flex-1 bg-raised" />
-                </div>
-                <button
-                  type="button"
-                  onClick={startDrawing}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                    <path d="M2 2l7.586 7.586" />
-                    <circle cx="11" cy="11" r="2" />
-                  </svg>
-                  Draw your own route
-                </button>
-              </>
-            )}
-
-            <div className="flex items-center gap-3">
-              <span className="h-px flex-1 bg-raised" />
-              <span className="text-[10px] font-medium uppercase tracking-wider text-faint">
-                or
-              </span>
-              <span className="h-px flex-1 bg-raised" />
-            </div>
-            <button
-              type="button"
-              onClick={openBuilder}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-hairline-strong text-sm font-semibold text-ink transition hover:bg-raised"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <circle cx="12" cy="10" r="3" />
-                <path d="M12 2a8 8 0 0 0-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8z" />
-              </svg>
-              Create your own route
-            </button>
-          </form>
-        </section>
+      <div className="absolute inset-x-0 bottom-0 z-20 flex max-h-full flex-col gap-2 overflow-y-auto p-3 sm:inset-x-auto sm:bottom-auto sm:left-5 sm:top-5 sm:max-h-[calc(100%-2.5rem)] sm:w-[380px] sm:p-0">
 
         {/* Route result card */}
         {active && (
