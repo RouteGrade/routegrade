@@ -451,20 +451,20 @@ export default function RunTracker({
     <div className="pointer-events-none absolute inset-0 z-20">
       {/* Countdown takes the whole stage, NRC style */}
       {phase === "countdown" && (
-        <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-sm">
-          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-zinc-400">
+        <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-canvas/90 backdrop-blur-sm">
+          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-muted">
             {route.name}
           </p>
           <span
             key={countdown}
-            className="run-countdown font-display text-[9rem] font-extrabold leading-none text-transparent bg-linear-to-br from-emerald-400 to-cyan-400 bg-clip-text"
+            className="run-countdown font-display text-[9rem] font-extrabold leading-none text-volt"
           >
             {countdown === 0 ? "GO" : countdown}
           </span>
           <button
             type="button"
             onClick={onExit}
-            className="mt-10 rounded-full border border-white/15 bg-white/5 px-5 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10"
+            className="mt-10 rounded-full border border-white/15 bg-raised px-5 py-2 text-sm font-medium text-ink transition hover:bg-raised"
           >
             Cancel
           </button>
@@ -480,22 +480,22 @@ export default function RunTracker({
                 type="button"
                 onClick={confirmExit}
                 aria-label="Exit run"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-950/80 text-zinc-300 backdrop-blur-xl transition hover:bg-zinc-900"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-canvas text-ink transition hover:bg-raised"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
               </button>
-              <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-zinc-950/80 px-4 py-2 backdrop-blur-xl">
+              <div className="min-w-0 flex-1 rounded-full border border-hairline bg-canvas px-4 py-2">
                 <div className="flex items-center justify-between gap-2 text-[11px] font-medium">
-                  <span className="truncate text-zinc-300">{route.name}</span>
-                  <span className="shrink-0 tabular-nums text-emerald-300">
+                  <span className="truncate text-ink">{route.name}</span>
+                  <span className="shrink-0 tabular-nums text-volt">
                     {remainingKm.toFixed(1)} km left
                   </span>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-raised">
                   <div
-                    className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-[width] duration-700"
+                    className="h-full rounded-full bg-volt transition-[width] duration-700"
                     style={{ width: `${progress * 100}%` }}
                   />
                 </div>
@@ -505,7 +505,7 @@ export default function RunTracker({
                 onClick={() => setMuted((m) => !m)}
                 aria-label={muted ? "Unmute audio cues" : "Mute audio cues"}
                 aria-pressed={muted}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-950/80 text-zinc-300 backdrop-blur-xl transition hover:bg-zinc-900"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-hairline bg-canvas text-ink transition hover:bg-raised"
               >
                 {muted ? (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -526,9 +526,9 @@ export default function RunTracker({
             {(offRoute || gpsError) && phase !== "finished" && (
               <div
                 role="alert"
-                className={`mx-auto mt-2 w-fit max-w-md rounded-full border px-4 py-1.5 text-xs font-semibold backdrop-blur-xl ${
+                className={`mx-auto mt-2 w-fit max-w-md rounded-full border px-4 py-1.5 text-xs font-semibold  ${
                   gpsError
-                    ? "border-amber-400/30 bg-amber-400/15 text-amber-300"
+                    ? "border-amber-400/30 bg-amber-400/15 text-muted"
                     : "border-rose-500/30 bg-rose-500/15 text-rose-300"
                 }`}
               >
@@ -540,12 +540,12 @@ export default function RunTracker({
           {/* Live stats + controls */}
           {phase !== "finished" && (
             <div className="pointer-events-auto absolute inset-x-0 bottom-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-              <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-zinc-950/85 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl">
+              <div className="mx-auto max-w-md rounded-3xl border border-hairline bg-surface p-5 shadow-2xl shadow-black/60">
                 <div className="text-center">
-                  <span className="font-display text-6xl font-extrabold tabular-nums tracking-tight text-white">
+                  <span className="font-display text-6xl font-extrabold tabular-nums tracking-tight text-ink">
                     {km.toFixed(2)}
                   </span>
-                  <span className="ml-2 text-sm font-semibold uppercase tracking-widest text-zinc-500">
+                  <span className="ml-2 text-sm font-semibold uppercase tracking-widest text-faint">
                     km
                   </span>
                 </div>
@@ -556,9 +556,9 @@ export default function RunTracker({
                     { label: "Avg pace", value: `${formatPace(avgPaceS)} /km` },
                     { label: "Pace", value: `${formatPace(currentPaceS)} /km` },
                   ].map((stat) => (
-                    <div key={stat.label} className="rounded-xl border border-white/10 bg-white/5 py-2">
-                      <dt className="text-[10px] uppercase tracking-wider text-zinc-500">{stat.label}</dt>
-                      <dd className="text-sm font-semibold tabular-nums text-white">{stat.value}</dd>
+                    <div key={stat.label} className="rounded-control border border-hairline bg-raised py-2">
+                      <dt className="text-[10px] uppercase tracking-wider text-faint">{stat.label}</dt>
+                      <dd className="text-sm font-semibold tabular-nums text-ink">{stat.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -569,7 +569,7 @@ export default function RunTracker({
                       type="button"
                       onClick={pauseRun}
                       aria-label="Pause run"
-                      className="flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-400 to-cyan-400 text-zinc-950 shadow-lg shadow-emerald-500/30 transition active:scale-95"
+                      className="flex h-16 w-16 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
                     >
                       <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
                         <rect x="6" y="5" width="4" height="14" rx="1" />
@@ -592,7 +592,7 @@ export default function RunTracker({
                         type="button"
                         onClick={resumeRun}
                         aria-label="Resume run"
-                        className="flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-400 to-cyan-400 text-zinc-950 shadow-lg shadow-emerald-500/30 transition active:scale-95"
+                        className="flex h-16 w-16 items-center justify-center rounded-full bg-volt text-canvas transition active:scale-95"
                       >
                         <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-6 w-6">
                           <path d="M8 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 8 5.5Z" />
@@ -602,7 +602,7 @@ export default function RunTracker({
                   )}
                 </div>
                 {phase === "paused" && (
-                  <p className="mt-2 text-center text-[11px] text-zinc-500">
+                  <p className="mt-2 text-center text-[11px] text-faint">
                     Paused — press stop to finish your run
                   </p>
                 )}
@@ -612,13 +612,13 @@ export default function RunTracker({
 
           {/* Summary */}
           {phase === "finished" && (
-            <div className="pointer-events-auto absolute inset-0 flex items-end justify-center overflow-y-auto bg-zinc-950/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
-              <section className="animate-float-in w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/90 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl">
+            <div className="pointer-events-auto absolute inset-0 flex items-end justify-center overflow-y-auto bg-canvas/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
+              <section className="animate-float-in w-full max-w-md rounded-3xl border border-hairline bg-canvas/90 p-6 shadow-2xl shadow-black/60">
                 <header className="text-center">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-volt">
                     Run complete
                   </p>
-                  <h2 className="mt-1 truncate font-display text-lg font-bold text-white">
+                  <h2 className="mt-1 truncate font-display text-lg font-bold text-ink">
                     {route.name}
                   </h2>
                 </header>
@@ -644,17 +644,17 @@ export default function RunTracker({
 
                 {splits.length > 0 && (
                   <div className="mt-4">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                       Splits
                     </h3>
-                    <ul className="mt-1.5 max-h-36 overflow-y-auto rounded-xl border border-white/10 bg-white/5">
+                    <ul className="mt-1.5 max-h-36 overflow-y-auto rounded-control border border-hairline bg-raised">
                       {splits.map((split) => (
                         <li
                           key={split.km}
-                          className="flex items-center justify-between border-b border-white/5 px-3 py-1.5 text-xs last:border-b-0"
+                          className="flex items-center justify-between border-b border-hairline px-3 py-1.5 text-xs last:border-b-0"
                         >
-                          <span className="text-zinc-400">km {split.km}</span>
-                          <span className="font-semibold tabular-nums text-white">
+                          <span className="text-muted">km {split.km}</span>
+                          <span className="font-semibold tabular-nums text-ink">
                             {formatPace(split.duration_s)}
                           </span>
                         </li>
@@ -675,10 +675,10 @@ export default function RunTracker({
                       type="button"
                       onClick={handleSave}
                       disabled={saving || saved}
-                      className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold transition ${
+                      className={`flex h-11 w-full items-center justify-center gap-2 rounded-control text-sm font-bold transition ${
                         saved
-                          ? "cursor-default border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                          : "bg-linear-to-r from-emerald-400 to-cyan-400 text-zinc-950 shadow-lg shadow-emerald-500/20 hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+                          ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
+                          : "bg-volt text-canvas  hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
                       }`}
                     >
                       {saved ? (
@@ -699,20 +699,20 @@ export default function RunTracker({
                   ) : (
                     <Link
                       href="/login?next=/"
-                      className="flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10"
+                      className="flex h-11 w-full items-center justify-center rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
                     >
                       Sign in to save &amp; rate this run
                     </Link>
                   )}
                   {saveError && (
-                    <p role="alert" className="text-center text-xs text-rose-400">
+                    <p role="alert" className="text-center text-xs text-danger">
                       {saveError}
                     </p>
                   )}
                   <button
                     type="button"
                     onClick={onExit}
-                    className="flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm font-semibold text-zinc-300 transition hover:bg-white/10"
+                    className="flex h-11 w-full items-center justify-center rounded-control border border-hairline bg-raised text-sm font-semibold text-ink transition hover:bg-raised"
                   >
                     Done
                   </button>

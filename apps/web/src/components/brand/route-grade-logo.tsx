@@ -10,8 +10,8 @@ type Size = "sm" | "md" | "lg";
 
 const SIZE: Record<Size, { box: string; radius: string }> = {
   sm: { box: "h-8 w-8", radius: "rounded-lg" },
-  md: { box: "h-10 w-10", radius: "rounded-xl" },
-  lg: { box: "h-14 w-14", radius: "rounded-2xl" },
+  md: { box: "h-10 w-10", radius: "rounded-control" },
+  lg: { box: "h-14 w-14", radius: "rounded-card" },
 };
 
 type MarkProps = { size?: Size } & Omit<HTMLAttributes<HTMLSpanElement>, "aria-hidden">;
@@ -22,7 +22,7 @@ export function RouteGradeMark({ size = "md", className, ...rest }: MarkProps) {
     <span
       aria-hidden="true"
       {...rest}
-      className={`inline-flex items-center justify-center overflow-hidden ${s.box} ${s.radius} shadow-lg shadow-emerald-500/20 ring-1 ring-white/10 ${className ?? ""}`.trim()}
+      className={`inline-flex items-center justify-center overflow-hidden ${s.box} ${s.radius}  ring-1 ring-hairline ${className ?? ""}`.trim()}
     >
       {/* Plain <img> for the SVG — no next/image config needed, it's already tiny. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -46,11 +46,11 @@ export function RouteGradeLogo({ size = "md", tagline = false, className }: Logo
     <span className={`inline-flex items-center gap-3 ${className ?? ""}`.trim()}>
       <RouteGradeMark size={size} />
       <span className="flex flex-col leading-tight">
-        <span className="font-display text-lg font-bold tracking-tight text-white">
+        <span className="font-display text-lg font-bold tracking-tight text-ink">
           RouteGrade
         </span>
         {tagline && (
-          <span className="text-[11px] text-zinc-400">Run routes, graded.</span>
+          <span className="text-[11px] text-muted">Run routes, graded.</span>
         )}
       </span>
     </span>

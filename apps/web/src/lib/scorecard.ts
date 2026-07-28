@@ -42,38 +42,41 @@ export type GradeMeta = {
   hexTo: string;
 };
 
+// An ordered scale, not decoration: the hue carries the grade, so it stays a
+// monotonic volt -> amber -> red ramp. A lands on the brand accent, which makes
+// the best grade and the app's primary action read as the same "good" colour.
 export const GRADE_META: Record<Grade, GradeMeta> = {
   A: {
     label: "Excellent run",
     blurb: "A top-tier route worth coming back to.",
-    from: "from-emerald-400",
-    to: "to-lime-400",
-    hexFrom: "#34d399",
+    from: "from-[#d8ff3e]",
+    to: "to-[#a3e635]",
+    hexFrom: "#d8ff3e",
     hexTo: "#a3e635",
   },
   B: {
     label: "Good run",
     blurb: "A solid, enjoyable route.",
-    from: "from-cyan-400",
-    to: "to-emerald-400",
-    hexFrom: "#22d3ee",
-    hexTo: "#34d399",
+    from: "from-[#a3e635]",
+    to: "to-[#84cc16]",
+    hexFrom: "#a3e635",
+    hexTo: "#84cc16",
   },
   C: {
     label: "Fair run",
     blurb: "Gets the job done, with some trade-offs.",
-    from: "from-amber-400",
-    to: "to-yellow-400",
+    from: "from-[#fbbf24]",
+    to: "to-[#f59e0b]",
     hexFrom: "#fbbf24",
-    hexTo: "#facc15",
+    hexTo: "#f59e0b",
   },
   D: {
     label: "Rough run",
     blurb: "Better options are probably nearby.",
-    from: "from-rose-500",
-    to: "to-orange-400",
-    hexFrom: "#f43f5e",
-    hexTo: "#fb923c",
+    from: "from-[#fb7185]",
+    to: "to-[#f97316]",
+    hexFrom: "#fb7185",
+    hexTo: "#f97316",
   },
 };
 

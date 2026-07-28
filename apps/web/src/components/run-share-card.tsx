@@ -551,7 +551,7 @@ export function RunShareCard({ data }: { data: RunShareData }) {
 
   return (
     <div>
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/60">
+      <div className="overflow-hidden rounded-card border border-hairline bg-canvas shadow-2xl shadow-black/60">
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
@@ -571,7 +571,7 @@ export function RunShareCard({ data }: { data: RunShareData }) {
           type="button"
           onClick={handleShare}
           disabled={state === "rendering"}
-          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/25 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -590,7 +590,7 @@ export function RunShareCard({ data }: { data: RunShareData }) {
           onClick={handleDownload}
           disabled={state === "rendering"}
           aria-label="Download run video"
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 disabled:opacity-70"
+          className="flex h-11 w-11 items-center justify-center rounded-control border border-hairline bg-raised text-ink transition hover:bg-raised disabled:opacity-70"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
             <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
@@ -598,16 +598,16 @@ export function RunShareCard({ data }: { data: RunShareData }) {
         </button>
       </div>
       {state === "error" && (
-        <p role="alert" className="mt-2 text-center text-xs text-rose-400">
+        <p role="alert" className="mt-2 text-center text-xs text-danger">
           Couldn&apos;t export. Try the download button instead.
         </p>
       )}
       {state === "saved" && (
-        <p className="mt-2 text-center text-xs text-emerald-300">
+        <p className="mt-2 text-center text-xs text-volt">
           Saved to your device.
         </p>
       )}
-      <p className="mt-2 text-center text-[10px] text-zinc-500">
+      <p className="mt-2 text-center text-[10px] text-faint">
         Shape only — no map, address, or coordinates are included.
       </p>
     </div>

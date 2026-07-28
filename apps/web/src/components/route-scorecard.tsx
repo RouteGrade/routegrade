@@ -238,7 +238,7 @@ export function RouteScorecard({
       role="dialog"
       aria-modal="true"
       aria-label="Route scorecard"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-canvas p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -250,7 +250,7 @@ export function RouteScorecard({
           type="button"
           onClick={onClose}
           aria-label="Close scorecard"
-          className="absolute -top-2 -right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-zinc-300 shadow-lg transition hover:bg-zinc-800"
+          className="absolute -top-2 -right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-hairline bg-surface text-ink transition hover:bg-raised"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
             <path d="M18 6 6 18M6 6l12 12" />
@@ -258,47 +258,47 @@ export function RouteScorecard({
         </button>
 
         {/* The card */}
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/70">
+        <div className="overflow-hidden rounded-3xl border border-hairline bg-canvas shadow-2xl shadow-black/70">
           <div
             className={`relative bg-linear-to-br ${meta.from} ${meta.to} px-6 pb-8 pt-7`}
           >
             <div className="scorecard-sheen pointer-events-none absolute inset-0" />
-            <p className="text-center text-[11px] font-bold uppercase tracking-[0.3em] text-zinc-950/70">
+            <p className="text-center text-[11px] font-bold uppercase tracking-[0.3em] text-canvas/70">
               RouteGrade
             </p>
             <div className="mt-1 flex items-center justify-center">
-              <span className="scorecard-grade font-display text-[7rem] font-extrabold leading-none text-zinc-950">
+              <span className="scorecard-grade font-display text-[7rem] font-extrabold leading-none text-canvas">
                 {route.grade}
               </span>
             </div>
-            <p className="text-center font-display text-2xl font-bold tabular-nums text-zinc-950">
+            <p className="text-center font-display text-2xl font-bold tabular-nums text-canvas">
               {Math.round(score)}
-              <span className="text-lg font-semibold text-zinc-950/70">/100</span>
+              <span className="text-lg font-semibold text-canvas/70">/100</span>
             </p>
-            <p className="mt-0.5 text-center text-xs font-semibold uppercase tracking-widest text-zinc-950/70">
+            <p className="mt-0.5 text-center text-xs font-semibold uppercase tracking-widest text-canvas/70">
               {meta.label}
             </p>
           </div>
 
           <div className="px-6 py-5">
-            <h2 className="truncate text-center font-display text-base font-bold text-white">
+            <h2 className="truncate text-center font-display text-base font-bold text-ink">
               {route.name}
             </h2>
             <ul className="mt-4 flex flex-col gap-2">
               {reasons.map((reason, i) => (
                 <li
                   key={`${reason.key}-${i}`}
-                  className="scorecard-reason flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5"
+                  className="scorecard-reason flex items-center gap-3 rounded-control border border-hairline bg-raised px-3.5 py-2.5"
                   style={{ animationDelay: `${250 + i * 90}ms` }}
                 >
                   <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br ${meta.from} ${meta.to} text-zinc-950`}
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br ${meta.from} ${meta.to} text-canvas`}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                       {REASON_ICON[reason.key]}
                     </svg>
                   </span>
-                  <span className="text-sm font-medium text-zinc-200">
+                  <span className="text-sm font-medium text-ink">
                     {reason.text}
                   </span>
                 </li>
@@ -310,7 +310,7 @@ export function RouteScorecard({
                 type="button"
                 onClick={handleShare}
                 disabled={shareState === "working"}
-                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-400 to-cyan-400 text-sm font-bold text-zinc-950 shadow-lg shadow-emerald-500/25 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
+                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-control bg-volt text-sm font-bold text-canvas transition hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -327,7 +327,7 @@ export function RouteScorecard({
                 onClick={handleDownload}
                 disabled={shareState === "working"}
                 aria-label="Download scorecard image"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-200 transition hover:bg-white/10 disabled:opacity-70"
+                className="flex h-11 w-11 items-center justify-center rounded-control border border-hairline bg-raised text-ink transition hover:bg-raised disabled:opacity-70"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                   <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
@@ -335,11 +335,11 @@ export function RouteScorecard({
               </button>
             </div>
             {shareState === "error" && (
-              <p role="alert" className="mt-2 text-center text-xs text-rose-400">
+              <p role="alert" className="mt-2 text-center text-xs text-danger">
                 Couldn&apos;t share. Try the download button instead.
               </p>
             )}
-            <p className="mt-2 text-center text-[10px] text-zinc-500">
+            <p className="mt-2 text-center text-[10px] text-faint">
               Private until you share. No location is included.
             </p>
           </div>
