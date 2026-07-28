@@ -294,6 +294,30 @@ for path in "/v1/users/me" "/v1/users/me/routes" "/v1/users/me/runs"; do
   fi
 done
 
+# ---- 11. Deployed schema matches the migration head (only with a DB URL) ----
+# Added after the 2026-07-28 outage: production sat four migrations behind head,
+# the ORM selected a column that no longer existed, and every saved-routes
+# request 500'd — undetected until a human opened the Routes tab. Check 10 above
+# stays green in exactly that state, because a 401 comes back long before any
+# SQL runs, which is why it caught nothing.
+#
+# Skipped rather than failed when DATABASE_URL is absent: the rest of this
+# script is deliberately runnable with no credentials, and a check that always
+# fails for most runners is one people learn to ignore.
+echo "${C_BOLD}[db]${C_OFF} schema matches migration head"
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  printf "  %sSKIP%s  schema drift — set DATABASE_URL to enable\n" "$C_YELLOW" "$C_OFF"
+else
+  API_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../services/api" && pwd)"
+  DRIFT_OUT=$(cd "$API_DIR" && uv run python scripts/check_schema_drift.py 2>&1)
+  DRIFT_CODE=$?
+  case "$DRIFT_CODE" in
+    0) pass "database is at migration head" ;;
+    1) fail "database is at migration head" "$DRIFT_OUT" ;;
+    *) printf "  %sSKIP%s  schema drift — %s\n" "$C_YELLOW" "$C_OFF" "$DRIFT_OUT" ;;
+  esac
+fi
+
 # ---- Summary ----
 echo
 TOTAL=$((PASS_COUNT + FAIL_COUNT))
