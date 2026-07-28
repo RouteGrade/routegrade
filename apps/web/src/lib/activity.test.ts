@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { summarizeRuns, summarizeSplits } from "./activity";
+import {
+  periodStart,
+  runsWithin,
+  summarizePeriod,
+  summarizeRuns,
+  summarizeSplits,
+} from "./activity";
 import type { RecordedRun } from "@/lib/api/runs-client";
 
 function run(partial: Partial<RecordedRun>): RecordedRun {
@@ -54,6 +60,93 @@ describe("summarizeRuns", () => {
     const totals = summarizeRuns([run({ distance_km: 0, duration_s: 120 })]);
     expect(totals.avgPaceSPerKm).toBeNull();
     expect(totals.durationS).toBe(120);
+  });
+});
+
+describe("periodStart", () => {
+  // Local time throughout: a runner's "this week" is the one they lived.
+  // 2026-07-29 is a Wednesday.
+  const wednesday = new Date(2026, 6, 29, 14, 30);
+
+  it("starts the week on the preceding Monday", () => {
+    expect(periodStart("week", wednesday)).toEqual(new Date(2026, 6, 27));
+  });
+
+  it("treats Sunday as the end of its week, not the start of the next", () => {
+    // 2026-08-02 is a Sunday; its week still began Monday 2026-07-27.
+    const sunday = new Date(2026, 7, 2, 9, 0);
+    expect(periodStart("week", sunday)).toEqual(new Date(2026, 6, 27));
+  });
+
+  it("starts the week on the same day when it is already Monday", () => {
+    const monday = new Date(2026, 6, 27, 23, 59);
+    expect(periodStart("week", monday)).toEqual(new Date(2026, 6, 27));
+  });
+
+  it("starts the month and the year on their first day", () => {
+    expect(periodStart("month", wednesday)).toEqual(new Date(2026, 6, 1));
+    expect(periodStart("year", wednesday)).toEqual(new Date(2026, 0, 1));
+  });
+});
+
+describe("runsWithin", () => {
+  const now = new Date(2026, 6, 29, 14, 30); // Wednesday
+
+  it("keeps runs from the period and drops earlier ones", () => {
+    const kept = run({ id: "monday", started_at: new Date(2026, 6, 27, 7).toISOString() });
+    const dropped = run({ id: "last-week", started_at: new Date(2026, 6, 26, 7).toISOString() });
+    expect(runsWithin([kept, dropped], "week", now).map((r) => r.id)).toEqual([
+      "monday",
+    ]);
+  });
+
+  it("widens as the period widens", () => {
+    const runs = [
+      run({ id: "today", started_at: new Date(2026, 6, 29, 6).toISOString() }),
+      run({ id: "this-month", started_at: new Date(2026, 6, 3, 6).toISOString() }),
+      run({ id: "this-year", started_at: new Date(2026, 1, 3, 6).toISOString() }),
+      run({ id: "last-year", started_at: new Date(2025, 11, 3, 6).toISOString() }),
+    ];
+    expect(runsWithin(runs, "week", now)).toHaveLength(1);
+    expect(runsWithin(runs, "month", now)).toHaveLength(2);
+    expect(runsWithin(runs, "year", now)).toHaveLength(3);
+  });
+
+  it("drops a run whose start date cannot be parsed", () => {
+    expect(runsWithin([run({ started_at: "not a date" })], "year", now)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("summarizePeriod", () => {
+  const now = new Date(2026, 6, 29, 14, 30);
+
+  it("totals only the runs inside the period", () => {
+    const totals = summarizePeriod(
+      [
+        run({ started_at: new Date(2026, 6, 28, 7).toISOString(), distance_km: 10, duration_s: 3000 }),
+        run({ started_at: new Date(2026, 5, 28, 7).toISOString(), distance_km: 42, duration_s: 15000 }),
+      ],
+      "week",
+      now,
+    );
+    expect(totals.runs).toBe(1);
+    expect(totals.distanceKm).toBeCloseTo(10);
+  });
+
+  it("reports an honest empty period rather than borrowing from a wider one", () => {
+    const totals = summarizePeriod(
+      [run({ started_at: new Date(2026, 0, 5, 7).toISOString(), distance_km: 10, duration_s: 3000 })],
+      "week",
+      now,
+    );
+    expect(totals).toEqual({
+      runs: 0,
+      distanceKm: 0,
+      durationS: 0,
+      avgPaceSPerKm: null,
+    });
   });
 });
 

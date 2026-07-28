@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import {
   ApiError,
-  fetchCurrentUser,
   provisionCurrentUser,
   updateDisplayName,
   type UserProfile,
 } from "@/lib/api/authenticated-client";
+import { RunnerStats } from "./runner-stats";
 
 type LoadState =
   | { kind: "loading" }
@@ -78,21 +78,6 @@ export function YouView() {
     }
   }
 
-  async function onRefresh() {
-    if (state.kind !== "ready") return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const profile = await fetchCurrentUser();
-      setState({ kind: "ready", profile });
-      setDraftName(profile.display_name ?? "");
-    } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : "Could not refresh.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   if (state.kind === "loading") {
     return <p className="text-sm text-muted">Loading your profile…</p>;
   }
@@ -140,41 +125,36 @@ export function YouView() {
         </div>
       </div>
 
-      <form onSubmit={onSave} className="mt-8 flex flex-col gap-3">
-        <label htmlFor="display_name" className="rg-label">
-          Display name
-        </label>
-        <input
-          id="display_name"
-          type="text"
-          maxLength={80}
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          className="h-13 rounded-control border border-hairline bg-surface px-4 text-base text-ink outline-none transition-colors placeholder:text-faint focus:border-volt"
-        />
-        <div className="flex items-center gap-3">
+      <RunnerStats />
+
+      <section aria-label="Settings" className="mt-8">
+        <h2 className="rg-label mb-3">Settings</h2>
+        <form onSubmit={onSave} className="flex flex-col gap-3">
+          <label htmlFor="display_name" className="rg-label">
+            Display name
+          </label>
+          <input
+            id="display_name"
+            type="text"
+            maxLength={80}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            className="h-13 rounded-control border border-hairline bg-surface px-4 text-base text-ink outline-none transition-colors placeholder:text-faint focus:border-volt"
+          />
           <button
             type="submit"
             disabled={saving}
-            className="rg-btn rg-btn-primary flex-1"
+            className="rg-btn rg-btn-primary"
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={saving}
-            className="rg-btn rg-btn-secondary"
-          >
-            Refresh
-          </button>
-        </div>
-        {saveError && (
-          <p role="alert" className="text-xs text-danger">
-            {saveError}
-          </p>
-        )}
-      </form>
+          {saveError && (
+            <p role="alert" className="text-xs text-danger">
+              {saveError}
+            </p>
+          )}
+        </form>
+      </section>
 
       <div className="mt-10 border-t border-hairline pt-6">
         <p className="rg-label">

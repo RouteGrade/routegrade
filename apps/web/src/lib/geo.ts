@@ -187,6 +187,17 @@ export function formatDuration(totalSeconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+/**
+ * "412h 33m" from total seconds — for lifetime figures, where `formatDuration`
+ * would render a three-digit hour count that reads like a stopwatch.
+ */
+export function formatTotalTime(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 /** Spoken form of a pace for audio cues: "5 minutes 42 seconds per kilometer". */
 export function spokenPace(secondsPerKm: number): string {
   const min = Math.floor(secondsPerKm / 60);
