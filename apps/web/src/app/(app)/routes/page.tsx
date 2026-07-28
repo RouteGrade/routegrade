@@ -1,6 +1,6 @@
 import { Screen, ScreenSection, SignedOut } from "@/components/shell/screen";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { DrawRouteCard } from "./draw-route-card";
+import { BuildRouteCard } from "./build-route-card";
 import { SavedRoutesSection } from "./saved-routes-section";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function RoutesPage() {
 
   return (
     <Screen title="Routes">
-      <DrawRouteCard />
+      <BuildRouteCard />
       <ScreenSection label="Saved">
         {isAuthenticated ? (
           <SavedRoutesSection />

@@ -185,6 +185,54 @@ export async function routeSegment(
   return { geometry: body.geometry, distanceMeters: body.distance_km * 1000 };
 }
 
+export type GeocodeResult = {
+  latitude: number;
+  longitude: number;
+  label: string;
+};
+
+/** Resolve an address to a point (for the multi-stop route builder). */
+export async function geocodeAddress(address: string): Promise<GeocodeResult> {
+  const res = await fetch(`${API_BASE}/v1/routes/geocode`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address }),
+  });
+  if (!res.ok) {
+    let detail = res.status === 404 ? "We couldn't find that address." : `HTTP ${res.status}`;
+    try {
+      const p = await res.json();
+      if (p?.detail?.message) detail = p.detail.message;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as GeocodeResult;
+}
+
+/** Route options between two points (loop mode picks the least-overlapping). */
+export async function routeAlternatives(
+  start: [number, number],
+  end: [number, number],
+  signal?: AbortSignal,
+): Promise<Array<{ geometry: LineStringGeometry; distanceMeters: number }>> {
+  const res = await fetch(`${API_BASE}/v1/routes/alternatives`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start, end }),
+    signal,
+  });
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  const body = (await res.json()) as {
+    routes: Array<{ geometry: LineStringGeometry; distance_km: number }>;
+  };
+  return body.routes.map((r) => ({
+    geometry: r.geometry,
+    distanceMeters: r.distance_km * 1000,
+  }));
+}
+
 export async function listSavedRoutes(): Promise<SavedRoute[]> {
   const { routes } = await request<{ routes: SavedRoute[] }>("/v1/users/me/routes");
   return routes;

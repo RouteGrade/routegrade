@@ -1,0 +1,13 @@
+# Runs osrm-routed for the pre-built foot graph (MLD algorithm).
+# Reads deploy/osrm/.env for the variables below (Compose loads it automatically).
+# Build the graph first with ./build-graph.sh, then: docker compose up -d
+services:
+  osrm:
+    image: ${OSRM_IMAGE:-ghcr.io/project-osrm/osrm-backend:latest}
+    command: osrm-routed --algorithm mld /data/${OSRM_DATASET:-ontario-latest}
+    volumes:
+      - ${OSRM_DATA_DIR:-./data}:/data
+    ports:
+      # Bind localhost only; reverse-proxy TLS in front (OSRM has no auth).
+      - "${OSRM_BIND:-127.0.0.1:5000}:5000"
+    restart: unless-stopped

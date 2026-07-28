@@ -33,6 +33,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.db.models.route_feedback import RouteFeedback  # noqa: E402
 from app.db.models.run import Run  # noqa: E402
 from app.db.models.run_rating import RunRating  # noqa: E402
 from app.db.models.saved_route import SavedRoute  # noqa: E402
@@ -116,6 +117,7 @@ def _make_test_engine():
     SavedRoute.__table__.create(bind=engine)
     Run.__table__.create(bind=engine)
     RunRating.__table__.create(bind=engine)
+    RouteFeedback.__table__.create(bind=engine)
     return engine
 
 

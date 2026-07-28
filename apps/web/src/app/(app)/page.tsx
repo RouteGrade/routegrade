@@ -11,8 +11,8 @@ export default async function Home({
   const params = await searchParams;
   const routeParam = params.route;
   const savedRouteId = typeof routeParam === "string" ? routeParam : undefined;
-  // The Routes tab links here with ?draw=1 to open straight into draw mode.
-  const startInDrawMode = params.draw === "1";
+  // The Routes tab links here with ?build=1 to open the route builder directly.
+  const startInBuilderMode = params.build === "1";
 
   let isAuthenticated = false;
   try {
@@ -32,7 +32,7 @@ export default async function Home({
       <RouteExplorer
         isAuthenticated={isAuthenticated}
         savedRouteId={savedRouteId}
-        startInDrawMode={startInDrawMode}
+        startInBuilderMode={startInBuilderMode}
       />
     </main>
   );

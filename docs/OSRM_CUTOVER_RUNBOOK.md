@@ -7,6 +7,12 @@ Operational runbook for switching `/v1/routes/plan` from the public OSRM demo
 executed once per host provisioning. Cutover itself is env-vars-only: no code
 change or redeploy of application logic is needed.
 
+> **Fast path:** the manual steps below are pre-packaged as turnkey
+> infra-as-code in [`deploy/osrm/`](../deploy/osrm/) — copy that directory to the
+> host, run `./build-graph.sh`, `docker compose up -d`, `./healthcheck.sh`, then
+> set the two Vercel vars. This runbook remains the reference for host sizing,
+> TLS, the Vercel redeploy, post-cutover verification, and rollback.
+
 - Code contract: only `OSRM_BASE_URL` and `OSRM_PROFILE` in Vercel env
   determine which OSRM the API talks to (`services/api/app/core/config.py`
   `osrm_base_url` / `osrm_profile`). This has been verified — no other file
