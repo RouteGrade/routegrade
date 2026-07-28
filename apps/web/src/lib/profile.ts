@@ -1,4 +1,4 @@
-import type { RecordedRun } from "@/lib/api/runs-client";
+import type { RecordedRun, RunSplit } from "@/lib/api/runs-client";
 import type { Grade } from "@/lib/scorecard";
 
 /**
@@ -22,22 +22,18 @@ export type PersonalBest = {
 
 export type PersonalBests = {
   longestDistanceKm: PersonalBest | null;
-  fastestPaceSPerKm: PersonalBest | null;
   longestDurationS: PersonalBest | null;
 };
 
 /**
- * Short runs are excluded from the pace record. Pace over a few hundred metres
- * is mostly GPS noise and a standing-start artefact, and letting it stand as a
- * personal best would park an unbeatable number on the profile forever.
+ * "How far" and "how long" records. Speed records live in `distanceRecords`,
+ * which measures it over a fixed distance rather than over a whole run.
+ *
+ * Ties keep the earlier run in the list.
  */
-export const MIN_PACE_RECORD_KM = 1;
-
-/** Records across a run history. Ties keep the earlier run in the list. */
 export function personalBests(runs: RecordedRun[]): PersonalBests {
   const bests: PersonalBests = {
     longestDistanceKm: null,
-    fastestPaceSPerKm: null,
     longestDurationS: null,
   };
 
@@ -46,30 +42,101 @@ export function personalBests(runs: RecordedRun[]): PersonalBests {
     const durationS = Number(run.duration_s) || 0;
     const at = { runId: run.id, startedAt: run.started_at };
 
-    if (
-      distanceKm > 0 &&
-      distanceKm > (bests.longestDistanceKm?.value ?? 0)
-    ) {
+    if (distanceKm > 0 && distanceKm > (bests.longestDistanceKm?.value ?? 0)) {
       bests.longestDistanceKm = { ...at, value: distanceKm };
     }
 
     if (durationS > 0 && durationS > (bests.longestDurationS?.value ?? 0)) {
       bests.longestDurationS = { ...at, value: durationS };
     }
-
-    // Derived from distance and duration rather than read from
-    // `avg_pace_s_per_km`, which is nullable and is the server's own rounding
-    // of the same two numbers.
-    if (distanceKm >= MIN_PACE_RECORD_KM && durationS > 0) {
-      const paceSPerKm = Math.round(durationS / distanceKm);
-      const best = bests.fastestPaceSPerKm;
-      if (best === null || paceSPerKm < best.value) {
-        bests.fastestPaceSPerKm = { ...at, value: paceSPerKm };
-      }
-    }
   }
 
   return bests;
+}
+
+/**
+ * The distances a speed record is kept over.
+ *
+ * 21 rather than 21.0975: splits are recorded per whole kilometre (see
+ * `run-tracker.tsx`), so the last 97.5 m of a half marathon is not a figure we
+ * hold. Reporting a 21 km time under a "half marathon" label would claim a time
+ * for a distance that was never measured, so the bracket is named for what it
+ * actually is.
+ */
+export const DISTANCE_BRACKETS = [1, 5, 10, 21] as const;
+
+export type BracketKm = (typeof DISTANCE_BRACKETS)[number];
+
+export type DistanceRecord = {
+  km: BracketKm;
+  /** Quickest time recorded over this distance. */
+  durationS: number;
+  runId: string;
+  startedAt: string;
+};
+
+/**
+ * Fastest time over each bracket distance, best-known-first.
+ *
+ * Measured as a rolling window over a run's kilometre splits, so "fastest 5 km"
+ * is the quickest five *consecutive whole kilometres* of any run — not
+ * necessarily the quickest 5 km stretch, which could start mid-kilometre. Whole
+ * splits are the finest granularity the recorder stores; a truer answer would
+ * need the raw GPS trace re-walked, which is a much heavier job for a figure
+ * that would move by seconds.
+ *
+ * Brackets nobody has run far enough to set are omitted rather than shown
+ * empty. Ties keep the earlier run in the list.
+ */
+export function distanceRecords(runs: RecordedRun[]): DistanceRecord[] {
+  const records: DistanceRecord[] = [];
+
+  for (const bracket of DISTANCE_BRACKETS) {
+    let best: DistanceRecord | null = null;
+
+    for (const run of runs) {
+      const durationS = fastestWindow(run.splits, bracket);
+      if (durationS === null) continue;
+      if (best === null || durationS < best.durationS) {
+        best = {
+          km: bracket,
+          durationS,
+          runId: run.id,
+          startedAt: run.started_at,
+        };
+      }
+    }
+
+    if (best) records.push(best);
+  }
+
+  return records;
+}
+
+/**
+ * Quickest run of `size` consecutive kilometre splits, or null when the run has
+ * no such stretch.
+ */
+function fastestWindow(splits: RunSplit[], size: number): number | null {
+  const usable = [...splits]
+    .filter((s) => Number.isFinite(s.duration_s) && s.duration_s > 0)
+    .sort((a, b) => a.km - b.km);
+  if (usable.length < size) return null;
+
+  let fastest: number | null = null;
+  for (let start = 0; start + size <= usable.length; start += 1) {
+    const end = start + size - 1;
+    // The recorder writes one split per whole kilometre, so a gap in the
+    // numbering means kilometres are missing and the window would silently
+    // span a distance longer than the bracket.
+    if (usable[end].km - usable[start].km !== size - 1) continue;
+
+    let total = 0;
+    for (let i = start; i <= end; i += 1) total += usable[i].duration_s;
+    if (fastest === null || total < fastest) fastest = total;
+  }
+
+  return fastest;
 }
 
 /** The subset of a saved route the grade profile needs. */

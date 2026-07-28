@@ -5,10 +5,10 @@ import { useEffect, useState } from "react";
 import { summarizeRuns } from "@/lib/activity";
 import { listSavedRoutes, type SavedRoute } from "@/lib/api/routes-client";
 import { listRuns, type RecordedRun } from "@/lib/api/runs-client";
-import { formatPace, formatTotalTime } from "@/lib/geo";
+import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
 import {
+  distanceRecords,
   GRADE_ORDER,
-  MIN_PACE_RECORD_KM,
   personalBests,
   summarizeRouteGrades,
   type PersonalBest,
@@ -106,6 +106,7 @@ function Lifetime({ runs }: { runs: Load<RecordedRun[]> }) {
 function Records({ runs }: { runs: Load<RecordedRun[]> }) {
   if (runs.kind !== "ready") return null;
 
+  const fastest = distanceRecords(runs.data);
   const bests = personalBests(runs.data);
   const rows: { label: string; value: string; best: PersonalBest }[] = [];
 
@@ -114,13 +115,6 @@ function Records({ runs }: { runs: Load<RecordedRun[]> }) {
       label: "Longest run",
       value: `${bests.longestDistanceKm.value.toFixed(2)} km`,
       best: bests.longestDistanceKm,
-    });
-  }
-  if (bests.fastestPaceSPerKm) {
-    rows.push({
-      label: `Fastest pace (${MIN_PACE_RECORD_KM} km+)`,
-      value: `${formatPace(bests.fastestPaceSPerKm.value)} /km`,
-      best: bests.fastestPaceSPerKm,
     });
   }
   if (bests.longestDurationS) {
@@ -132,16 +126,39 @@ function Records({ runs }: { runs: Load<RecordedRun[]> }) {
   }
 
   // Nothing to celebrate yet — the lifetime zeroes above already say so.
-  if (rows.length === 0) return null;
+  if (fastest.length === 0 && rows.length === 0) return null;
 
   return (
     <section aria-label="Personal bests" className="mt-8">
       <h2 className="rg-label mb-3">Records</h2>
+
+      {fastest.length > 0 && (
+        <ul className="mb-2 grid grid-cols-2 gap-2">
+          {fastest.map((record) => (
+            <li key={record.km}>
+              {/* Every record links to the run that set it — a number with no
+                  way back to its run is a dead end. */}
+              <Link
+                href={`/activity/${record.runId}`}
+                className="block rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-hairline-strong"
+              >
+                <p className="rg-label">Fastest {record.km} km</p>
+                <p className="rg-metric mt-2 text-2xl text-ink">
+                  {formatDuration(record.durationS)}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  {formatPace(Math.round(record.durationS / record.km))} /km ·{" "}
+                  {DATE_FORMAT.format(new Date(record.startedAt))}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <ul className="flex flex-col gap-2">
         {rows.map((row) => (
           <li key={row.label}>
-            {/* Every record links to the run that set it — a number with no way
-                back to its run is a dead end. */}
             <Link
               href={`/activity/${row.best.runId}`}
               className="flex items-center justify-between gap-4 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-hairline-strong"

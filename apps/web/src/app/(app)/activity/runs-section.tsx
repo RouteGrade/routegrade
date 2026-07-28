@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/shell/screen";
-import { summarizeRuns } from "@/lib/activity";
+import {
+  PERIOD_LABEL,
+  PERIODS,
+  summarizePeriod,
+  type Period,
+} from "@/lib/activity";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { deleteRun, listRuns, type RecordedRun } from "@/lib/api/runs-client";
 import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
@@ -23,6 +28,9 @@ export function RunsSection() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Month, not week: for anyone running a few times a week, "this week" is
+  // often empty early on, and a tab that opens on 0.0 km reads as broken.
+  const [period, setPeriod] = useState<Period>("month");
 
   useEffect(() => {
     let cancelled = false;
@@ -85,24 +93,51 @@ export function RunsSection() {
     );
   }
 
-  const totals = summarizeRuns(state.runs);
+  // `now` is read at render rather than held in state: the totals are a
+  // snapshot of the moment the tab was opened, and a tab left open across
+  // midnight re-reads it on the next interaction anyway.
+  const totals = summarizePeriod(state.runs, period, new Date());
 
   return (
     <>
-      {/* Lifetime totals. One hero figure, then the supporting numbers —
-          proportional figures, since these aren't a column that must align. */}
-      <section aria-label="Lifetime totals" className="mb-8">
+      {/* Period totals. Lifetime figures live on the You tab — this tab answers
+          "how am I doing lately?", which is a question with a horizon. */}
+      <section aria-label="Totals" className="mb-8">
+        {/* A group of toggle buttons rather than a tablist: there are no tab
+            panels here, only one figure that re-reads itself. */}
+        <div
+          role="group"
+          aria-label="Totals period"
+          className="mb-5 flex gap-1 rounded-control bg-surface p-1"
+        >
+          {PERIODS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={option === period}
+              onClick={() => setPeriod(option)}
+              className={`rg-label flex-1 rounded-[10px] py-2.5 transition-colors ${
+                option === period
+                  ? "bg-volt text-canvas"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+
         <p className="rg-metric text-[64px] leading-none text-ink [font-variant-numeric:proportional-nums]">
           {totals.distanceKm.toFixed(1)}
           <span className="ml-2 align-baseline text-xl text-muted">km</span>
         </p>
-        <p className="rg-label mt-2">Total distance</p>
+        <p className="rg-label mt-2">{PERIOD_LABEL[period]}</p>
 
         <dl className="mt-6 grid grid-cols-3 gap-3 border-t border-hairline pt-5">
           {[
             { label: "Runs", value: String(totals.runs) },
-            // A lifetime figure, so hours-and-minutes rather than a stopwatch
-            // reading — and the same rendering as the You tab's Time tile.
+            // Hours-and-minutes rather than a stopwatch reading, matching the
+            // You tab's Time tile.
             { label: "Time", value: formatTotalTime(totals.durationS) },
             {
               label: "Avg pace",
