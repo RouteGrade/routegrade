@@ -443,6 +443,20 @@ input[type="range"].rg-slider::-moz-range-thumb {
   font-size: 11px;
 }
 
+/* Zoom/compass buttons sit top-right, where the Run tab's search pill now
+   lives — push them clear of it (and of the notch). On touch screens drop them
+   entirely: pinch-to-zoom is the real gesture, and the buttons are just chrome
+   competing with the map. */
+.maplibregl-ctrl-top-right {
+  margin-top: calc(5.5rem + env(safe-area-inset-top));
+}
+
+@media (pointer: coarse) {
+  .maplibregl-ctrl-top-right {
+    display: none;
+  }
+}
+
 .maplibregl-ctrl-group {
   background: rgba(20, 20, 20, 0.92) !important;
   border: 1px solid rgba(255, 255, 255, 0.09);
