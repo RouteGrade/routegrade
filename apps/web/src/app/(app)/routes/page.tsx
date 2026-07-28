@@ -26,7 +26,7 @@ export default async function RoutesPage() {
         ) : (
           <SignedOut
             next="/routes"
-            body="Sign in to keep the routes you plan and draw, and pick them back up on any device."
+            body="Sign in to keep the routes you plan and build, and pick them back up on any device."
           />
         )}
       </ScreenSection>

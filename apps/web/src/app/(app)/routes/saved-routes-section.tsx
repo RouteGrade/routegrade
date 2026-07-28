@@ -72,7 +72,7 @@ export function SavedRoutesSection() {
       {state.kind === "ready" && state.routes.length === 0 && (
         <EmptyState
           title="Nothing saved"
-          body="Plan or draw a route, then save it to keep it here."
+          body="Plan or build a route, then save it to keep it here."
           cta={{ href: "/", label: "Find a route" }}
         />
       )}
