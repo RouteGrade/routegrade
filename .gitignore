@@ -1,7 +1,7 @@
 # Node
 node_modules/
 .next/
-out/
+# out/ handled per-app (apps/web/.gitignore keeps a placeholder entry point)
 
 # Python
 .venv/

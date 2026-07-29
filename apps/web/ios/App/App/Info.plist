@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>RouteGrade</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- App Transport Security blocks cleartext HTTP, which would stop the
+	     shell loading the dev server at http://<lan-ip>:3000 during live
+	     reload. NSAllowsLocalNetworking permits cleartext to local addresses
+	     only — deliberately not NSAllowsArbitraryLoads, which disables ATS
+	     everywhere and draws an App Review justification request. Shipping
+	     builds load from the bundle and never exercise this. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<!-- iOS 14+ prompts before an app may talk to devices on the local
+	     network. Without this string the prompt has nothing to show and the
+	     dev-server connection fails with no visible reason. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RouteGrade connects to a development server on your local network. This is only used when running a development build.</string>
+	<!-- Both strings are shown verbatim in the iOS permission prompt and are
+	     read closely during App Review: a vague purpose string is one of the
+	     most common rejection reasons for a location app. Say what is
+	     collected and why, in the runner's words. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RouteGrade uses your location to draw your route on the map, measure your distance and pace, and tell you if you drift off the course you planned.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>RouteGrade keeps recording your run while your screen is locked or you are in another app, so your distance and pace stay accurate with your phone in your pocket.</string>
+	<!-- The entitlement that makes background tracking possible at all. Without
+	     it iOS suspends the app on screen lock and the run stops recording. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<!-- Portrait only, matching orientation: "portrait" in the web manifest.
+	     The run screen is a vertical metric stack and the map fills the frame;
+	     neither has a landscape layout, so rotating mid-run would only break
+	     the very screen the runner cannot stop to fix. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>
