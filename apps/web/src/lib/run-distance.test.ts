@@ -157,6 +157,30 @@ describe("applyFix · does not invent distance", () => {
   });
 });
 
+describe("applyFix · the run that was reported", () => {
+  it("records a jog the old accumulator lost almost entirely", () => {
+    // Run 2517eca4 in the runs table, 2026-07-28. The founder ran ~1 km; the
+    // app stored 0.329 km. Its own saved GPS trace was 847.5 m long over just
+    // 21 accepted points in 591 s of moving time — i.e. the trace knew about
+    // ground the counter never added, which is the fingerprint of measuring
+    // from a baseline that advances on rejected fixes.
+    //
+    // Profile reconstructed from that row: 591 s at ~1.7 m/s, 1 Hz fixes. The
+    // smallest accepted step was 2.53 m, so the jitter floor was at its 2.5 m
+    // minimum and accuracy was around 10 m. At 1.7 m per fix, every single
+    // step falls under the floor.
+    const fixes = steadyRun(591, 1.7, 10);
+    const truth = haversineMeters(fixes[0].coord, fixes[fixes.length - 1].coord);
+
+    const state = feed(fixes);
+
+    expect(truth).toBeGreaterThan(990); // ~1 km, as reported
+    expect(state.distanceM).toBeCloseTo(truth, 0);
+    // The old accumulator returned 0.0 m for this exact profile.
+    expect(state.distanceM).toBeGreaterThan(900);
+  });
+});
+
 describe("applyFix · a realistic 5 km run", () => {
   it("lands within a fraction of a percent of the true distance", () => {
     // 3 m/s, one fix per second, 5 m accuracy: 1667 fixes for 4998 m.
