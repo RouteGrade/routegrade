@@ -66,8 +66,14 @@ export function SavedRoutesSection() {
         <BrandLoader label="Loading your routes" />
       )}
 
+      {/* role="alert" so the failure is announced, matching the delete error
+          below and the other two account tabs. Without it a screen-reader user
+          got silence on the load failure while still hearing the delete one,
+          which is the wrong way round. */}
       {state.kind === "error" && (
-        <p className="text-sm text-danger">{state.message}</p>
+        <p role="alert" className="text-sm text-danger">
+          {state.message}
+        </p>
       )}
 
       {state.kind === "ready" && state.routes.length === 0 && (
