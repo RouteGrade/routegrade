@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { PlannedRoute } from "@/lib/api/routes-client";
 import { GRADE_META, deriveReasons, type Grade } from "@/lib/scorecard";
+import { GradeFeedback } from "./grade-feedback";
 
 /**
  * The route detail screen: what you get after RouteGrade finds you something.
@@ -184,6 +185,22 @@ export function RouteDetail({
               </ul>
             )}
           </section>
+        )}
+
+        {/* Only on a saved route the runner owns: the feedback endpoint keys
+            on a saved-route id, so offering this on an unsaved plan would 404
+            the moment they pressed send. */}
+        {isAuthenticated && route.provider === "saved" && (
+          <GradeFeedback
+            routeId={route.id}
+            gradedScore={Number.isFinite(route.score) ? route.score : null}
+            gradedGrade={(route.grade as Grade) ?? null}
+            // PlannedRoute doesn't carry `preference` — it lives on SavedRoute
+            // and is dropped when one is mapped into this view. The API treats
+            // the snapshot as optional, so send null rather than guess a
+            // preference the runner never chose here.
+            preference={null}
+          />
         )}
       </div>
 
