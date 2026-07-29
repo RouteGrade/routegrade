@@ -16,6 +16,11 @@ import {
   spokenPace,
   type LngLat,
 } from "@/lib/geo";
+import {
+  applyFix,
+  initialDistanceState,
+  type DistanceState,
+} from "@/lib/run-distance";
 import type { Grade } from "@/lib/scorecard";
 import { RunShareCard } from "./run-share-card";
 import { EMPTY_RATING, hasRating, RunRating, type RatingDraft } from "./run-rating";
@@ -40,12 +45,6 @@ export type RunTelemetry = {
 };
 
 type Phase = "countdown" | "running" | "paused" | "finished";
-
-// GPS quality gates: ignore fixes worse than this for distance math, ignore
-// sub-jitter movement, and drop teleport glitches.
-const MAX_ACCURACY_M = 60;
-const MIN_STEP_M = 2.5;
-const MAX_SPEED_MPS = 10;
 
 // Off-route hysteresis: alert past 50 m (OFF_ROUTE_M, shared with the map's
 // camera-follow logic), recover under 30 m.
@@ -125,7 +124,7 @@ export default function RunTracker({
   // render cycle and must never read stale closures.
   const phaseRef = useRef<Phase>("countdown");
   const mutedRef = useRef(false);
-  const lastFixRef = useRef<{ coord: LngLat; timeMs: number } | null>(null);
+  const distanceStateRef = useRef<DistanceState>(initialDistanceState());
   const distanceRef = useRef(0);
   const traveledRef = useRef<LngLat[]>([]);
   const samplesRef = useRef<{ timeMs: number; distanceM: number }[]>([]);
@@ -169,23 +168,24 @@ export default function RunTracker({
   /** Single funnel for every position fix, real or simulated. */
   const handleFix = (coord: LngLat, accuracyM: number) => {
     const nowMs = performance.now();
-    const last = lastFixRef.current;
-    lastFixRef.current = { coord, timeMs: nowMs };
 
     // Always show where the runner is, even fixes we won't count.
     onTelemetry({ position: coord });
 
     if (phaseRef.current !== "running") return;
-    if (accuracyM > MAX_ACCURACY_M) return;
 
-    if (last) {
-      const stepM = haversineMeters(last.coord, coord);
-      const dtS = (nowMs - last.timeMs) / 1000;
-      if (stepM < Math.max(MIN_STEP_M, accuracyM * 0.25)) return; // GPS jitter
-      if (dtS > 0 && stepM / dtS > MAX_SPEED_MPS) return; // teleport glitch
-
-      distanceRef.current += stepM;
-    }
+    // Accumulation lives in lib/run-distance.ts so it can be tested — see the
+    // note there on why a rejected fix must never become the anchor.
+    const { state, verdict } = applyFix(distanceStateRef.current, {
+      coord,
+      accuracyM,
+      timeMs: nowMs,
+    });
+    distanceStateRef.current = state;
+    // A rejected fix contributes nothing downstream either: no trace point, no
+    // pace sample, no split check.
+    if (verdict !== "counted" && verdict !== "anchored") return;
+    distanceRef.current = state.distanceM;
 
     traveledRef.current.push(coord);
     samplesRef.current.push({ timeMs: nowMs, distanceM: distanceRef.current });
