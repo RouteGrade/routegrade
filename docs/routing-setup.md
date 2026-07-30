@@ -28,20 +28,54 @@ scoring** and returns scored GeoJSON loops.
 | `PROVIDER_TIMEOUT_SECONDS` | `10` | Per outbound call. |
 | `ROUTE_PLAN_DISTANCE_TOLERANCE` | `0.10` | Documented ±10% target; out-of-tolerance candidates are flagged, not hidden. |
 
+## ⚠️ The public demo server ignores `OSRM_PROFILE` entirely
+
+This is the single most important thing on this page, because it fails
+**silently** — no error, no warning, just wrong grades.
+
+`https://router.project-osrm.org` serves one graph (driving) and returns it
+whatever profile you put in the URL path. Measured 2026-07-29, same coordinate
+pair, `overview=false`:
+
+| Profile in URL | Result |
+| --- | --- |
+| `foot` | `code=Ok` · 1279.1 m · 150.7 s |
+| `driving` | `code=Ok` · 1279.1 m · 150.7 s |
+| `bicycle` | `code=Ok` · 1279.1 m · 150.7 s |
+| `nonsense` | `code=Ok` · 1279.1 m · 150.7 s |
+
+Byte-identical, including for a profile that does not exist. And 1279 m in
+150.7 s is **8.5 m/s — about 30 km/h**, which is a car; on foot that leg is
+roughly thirteen minutes.
+
+So setting `OSRM_PROFILE=foot` against the default `OSRM_BASE_URL` is a no-op.
+You get car routing wearing a foot label, and nothing in the config, the logs,
+or the response tells you. That is the root cause of grades clustering into one
+band: intersection density is derived from routing manoeuvres per km, and a car
+router collapses onto arterials with few turns no matter what the street grid
+actually looks like.
+
+**A `foot` profile only exists once you self-host.** The API now logs a warning
+at startup when it detects this combination (`app/main.py`), so the failure is
+at least visible.
+
 ## Self-hosting OSRM (production / offline dev)
 
+Use the turnkey tooling in [`deploy/osrm/`](../deploy/osrm/README.md) — it
+supersedes the hand-rolled `docker run` sequence this section used to carry.
+It ships `build-graph.sh` (fetch extract → `osrm-extract -p /opt/foot.lua` →
+partition → customize), a `docker-compose.yml` to serve it, `healthcheck.sh`,
+and `Caddyfile.example` for TLS.
+
+For the production cutover specifically — host sizing, step-by-step provision,
+the Vercel env switch, verification and rollback — follow
+[`docs/OSRM_CUTOVER_RUNBOOK.md`](./OSRM_CUTOVER_RUNBOOK.md).
+
+Once it is serving:
+
 ```bash
-# Ontario extract covers downtown Toronto (the MVP 3 service area).
-wget https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf
-docker run -t -v $(pwd):/data ghcr.io/project-osrm/osrm-backend \
-  osrm-extract -p /opt/foot.lua /data/ontario-latest.osm.pbf
-docker run -t -v $(pwd):/data ghcr.io/project-osrm/osrm-backend \
-  osrm-partition /data/ontario-latest.osrm
-docker run -t -v $(pwd):/data ghcr.io/project-osrm/osrm-backend \
-  osrm-customize /data/ontario-latest.osrm
-docker run -t -i -p 5000:5000 -v $(pwd):/data ghcr.io/project-osrm/osrm-backend \
-  osrm-routed --algorithm mld /data/ontario-latest.osrm
-# then: OSRM_BASE_URL=http://localhost:5000  OSRM_PROFILE=foot
+OSRM_BASE_URL=http://localhost:5000   # or https://osrm.your-domain.com
+OSRM_PROFILE=foot                     # now actually meaningful
 ```
 
 ## How loop generation works
@@ -53,11 +87,21 @@ radius is rescaled up to 4 times until the loop lands within ±5% (the endpoint
 then flags anything outside the configured ±10% tolerance). Three seed bearings
 (20°, 140°, 260°) produce three genuinely different candidates per request.
 
-## Known pre-launch requirements (tracked, not yet built)
+## Known pre-launch requirements
 
-- **Per-IP rate limiting on `/v1/routes/plan`.** The endpoint is public and each
-  call fans out to three external providers. Do not launch publicly without it.
+**Built and verified in production:**
+
+- **Per-IP rate limiting on `/v1/routes/plan`** — wired via
+  `enforce_plan_rate_limit` (`app/api/routes/plans.py`), 10/min sustained plus
+  5 burst by default. Confirmed live 2026-07-29: 20 parallel requests returned
+  exactly 15×200 + 5×429, and `scripts/smoke-test.sh` now checks it on every
+  run. (That check reported a false FAIL for a long time — it bursted serially
+  against a ~9 s endpoint, so the bucket refilled faster than it drained. Fixed
+  in PR #42.)
+
+**Still outstanding:**
+
 - **Plan caching.** Identical `(start, distance, preference)` requests should
   reuse a computed route (lightweight `route_plans` cache table) to cut
-  provider spend.
+  provider spend. Not built — there is no `route_plans` table in production.
 - **OSM data currency audit for Toronto** before committing to OSM-only inputs.
