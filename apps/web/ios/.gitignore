@@ -5,9 +5,13 @@ App/App/public
 DerivedData
 xcuserdata
 
+# Derived data from scripts/ios-sim.sh, kept in-tree so rebuilds stay warm.
+.build
+
 # Cordova plugins for Capacitor
 capacitor-cordova-ios-plugins
 
 # Generated Config files
 App/App/capacitor.config.json
 App/App/config.xml
+.build-device

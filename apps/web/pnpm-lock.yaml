@@ -11,12 +11,21 @@ importers:
       '@capacitor-community/background-geolocation':
         specifier: ^1.2.26
         version: 1.2.26(@capacitor/core@8.4.2)
+      '@capacitor/app':
+        specifier: ^8.1.1
+        version: 8.1.1(@capacitor/core@8.4.2)
+      '@capacitor/browser':
+        specifier: ^8.0.4
+        version: 8.0.4(@capacitor/core@8.4.2)
       '@capacitor/core':
         specifier: ^8.4.2
         version: 8.4.2
       '@capacitor/ios':
         specifier: ^8.4.2
         version: 8.4.2(@capacitor/core@8.4.2)
+      '@capacitor/splash-screen':
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@8.4.2)
       '@supabase/ssr':
         specifier: ^0.12.3
         version: 0.12.3(@supabase/supabase-js@2.110.7)
@@ -151,6 +160,16 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=3.0.0'
 
+  '@capacitor/app@8.1.1':
+    resolution: {integrity: sha512-xM2ZTX5jK60tFtmjsmJv+Cdj1Qsb6NcavkqmdEnCPQBeya9oKhamZJxYOnQNj1ZvcJM7sWfG6BEtSLx42pisbA==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/browser@8.0.4':
+    resolution: {integrity: sha512-ORZ4u/y+7aMuu6yVuk6SP529fUZyqcbnuHB1q5McpA3o2SYfVoi28iB8rsQjI2ad1qlKJd29ZUuGtspXLBDlWg==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/cli@8.4.2':
     resolution: {integrity: sha512-hE4HmpMdr5T8eQ++kGa1BKkdG2JLEvo1y1cj1kmFK78VB9dBp538oe1EZvzwupNGOl0ZueALotzL5wcXRD9w1Q==}
     engines: {node: '>=22.0.0'}
@@ -163,6 +182,11 @@ packages:
     resolution: {integrity: sha512-ClVzIjK++yRjsRPOpdEzhsZfbHfoEc0f4M6vD0v7sWh0qcoF6NkxNAeHpWTn4OPJpJfpGGoYsq+IfEHrYyBiWA==}
     peerDependencies:
       '@capacitor/core': ^8.4.0
+
+  '@capacitor/splash-screen@8.0.2':
+    resolution: {integrity: sha512-0C6rYScr13WfAE9nPl4ScOQynmjFv9NT3Th+RZkD4ezYHmER6mcl1/lDYsv7jg3Rj3FOvLrlTlmNkUrr83kZzQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -2844,6 +2868,14 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.4.2
 
+  '@capacitor/app@8.1.1(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+
+  '@capacitor/browser@8.0.4(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+
   '@capacitor/cli@8.4.2(supports-color@7.2.0)':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8(supports-color@7.2.0)
@@ -2871,6 +2903,10 @@ snapshots:
       tslib: 2.8.1
 
   '@capacitor/ios@8.4.2(@capacitor/core@8.4.2)':
+    dependencies:
+      '@capacitor/core': 8.4.2
+
+  '@capacitor/splash-screen@8.0.2(@capacitor/core@8.4.2)':
     dependencies:
       '@capacitor/core': 8.4.2
 
