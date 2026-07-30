@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>RouteGrade — offline</title>
+    <!--
+      Bundled into the app and shown by Capacitor (`server.errorPath`) when the
+      web layer cannot be loaded: dev server down, or no connection on a build
+      that points at a deployed origin.
+
+      Everything is inline. This page is the fallback for "the network failed",
+      so it cannot itself depend on the network for styles, fonts, or images —
+      the mark below is inline SVG for exactly that reason.
+    -->
+    <style>
+      :root {
+        --canvas: #0a0a0a;
+        --ink: #fafafa;
+        --muted: #8c8c8c;
+        --brand: #18ccd4;
+        --brand-ink: #0b1017;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--canvas);
+        color: var(--ink);
+        font: 15px/1.5 -apple-system, system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        padding: max(24px, env(safe-area-inset-top)) 32px
+                 max(24px, env(safe-area-inset-bottom));
+        text-align: center;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mark {
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+        background: var(--brand);
+        display: block;
+      }
+      h1 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+      p { margin: 0; color: var(--muted); max-width: 30ch; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="25" cy="79" r="4.6" fill="var(--brand-ink)" />
+      <g fill="none" stroke="var(--brand-ink)" stroke-width="7.6"
+         stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 25 79 L 25 28 Q 25 19.5 33.5 19.5 L 63 19.5 Q 75.5 19.5 75.5 30
+                 Q 75.5 40.5 63 40.5 L 50 40.5 Q 38.5 40.5 38.5 52 L 38.5 66
+                 Q 38.5 80 52.5 80 L 70 80 Q 85.5 80 85.5 66 L 85.5 54" />
+        <path d="M 50 60 L 73.5 60 M 67.5 54 L 73.5 60 L 67.5 66" />
+      </g>
+    </svg>
+
+    <h1>Can&rsquo;t reach RouteGrade</h1>
+    <!--
+      No retry button on purpose. This page is loaded from the app bundle, so a
+      reload would just reload this file rather than retry the server — a button
+      that visibly does nothing is worse than none. Reopening the app is what
+      actually retries.
+    -->
+    <p>Check your connection, then close and reopen the app.</p>
+  </body>
+</html>

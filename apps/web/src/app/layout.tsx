@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
 import { NativeAuthListener } from "@/components/auth/native-auth-listener";
+import { AppSplash } from "@/components/brand/app-splash";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import "./globals.css";
 
@@ -63,6 +64,9 @@ export default function RootLayout({
     >
       <body className="h-full bg-canvas font-sans text-ink">
         {children}
+        {/* Last in the body so it paints over the app without needing to wrap
+            it — the splash is an overlay, not a gate on rendering. */}
+        <AppSplash />
         <ServiceWorkerRegistrar />
         <NativeAuthListener />
       </body>

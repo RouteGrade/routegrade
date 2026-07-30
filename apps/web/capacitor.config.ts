@@ -26,17 +26,45 @@ const config: CapacitorConfig = {
   appName: "RouteGrade",
   webDir: "out",
 
-  ...(serverUrl
-    ? {
-        server: {
+  server: {
+    // Bundled page shown when the web layer cannot be loaded at all — the dev
+    // server is down, or the phone is offline on a build that points at a
+    // deployed origin. Without it the webview stays blank and the app looks
+    // frozen with nothing explaining why.
+    errorPath: "offline.html",
+
+    ...(serverUrl
+      ? {
           url: serverUrl,
           // Only opt into cleartext for an actual http:// origin — a plain-HTTP
           // server on the LAN. A tunnelled https:// dev server does not need it,
           // and a shipping build (no CAP_SERVER_URL at all) never reaches here.
           ...(serverUrl.startsWith("http://") ? { cleartext: true } : {}),
-        },
-      }
-    : {}),
+        }
+      : {}),
+  },
+
+  plugins: {
+    SplashScreen: {
+      // The native launch screen is a static image and cannot animate, so the
+      // web layer paints its own animated splash over the top and calls
+      // SplashScreen.hide() the moment it does (see `AppSplash`). That call is
+      // the normal, fast path and is what makes the handoff seamless.
+      //
+      // `launchShowDuration` is purely a dead-man's switch. Only the web layer
+      // can call hide(), so if the web layer never loads — dev server down,
+      // phone offline — nothing dismisses the splash and the app hangs on the
+      // logo forever. It also covers the `server.errorPath` page, so without
+      // this cap the offline screen would render *underneath* the splash and
+      // never be seen. Do not set launchAutoHide:false here again.
+      launchAutoHide: true,
+      launchShowDuration: 4000,
+      backgroundColor: "#0a0a0a",
+      // The web splash draws the mark; a system spinner next to it would read
+      // as two competing loading indicators.
+      showSpinner: false,
+    },
+  },
 
   ios: {
     // Matches --color-canvas, so the gap behind the webview during rotation
