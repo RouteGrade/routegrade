@@ -27,7 +27,10 @@ select
     routes.grade,
     'osrm'                         as provider,
     routes.created_at              as saved_at,
-    cast(routes.created_at as date) as saved_date,
+    -- UTC-explicit for the same reason as dim_users.signup_date: a bare cast
+    -- of a timestamptz resolves against the session TimeZone, which would make
+    -- fct_route_scores_daily's grain depend on who ran dbt.
+    cast(routes.created_at at time zone 'UTC' as date) as saved_date,
     users.signup_at
 from routes
 left join users on users.user_id = routes.user_id
