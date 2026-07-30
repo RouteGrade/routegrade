@@ -87,7 +87,14 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Skip static assets and Next internals; run on everything else so protected
   // pages always see a fresh session.
+  //
+  // The PWA trio is excluded by name rather than extension: they are fetched
+  // on every app launch and none of them can carry a session, so running a
+  // Supabase token refresh on them only buys latency. `sw.js` especially —
+  // the browser re-validates it on every navigation, and the `no-store`
+  // headers @supabase/ssr attaches alongside auth cookies have no business on
+  // a service worker script.
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|sw\\.js|manifest\\.webmanifest|offline\\.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

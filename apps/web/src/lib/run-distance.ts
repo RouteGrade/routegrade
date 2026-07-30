@@ -29,7 +29,12 @@ export const MAX_SPEED_MPS = 10;
 export type Fix = {
   coord: LngLat;
   accuracyM: number;
-  /** Monotonic clock in ms (`performance.now()` at the call site). */
+  /**
+   * When the device took the reading, in ms. Any clock will do as long as
+   * every fix in a run comes from the same one and never goes backwards —
+   * the tracker feeds it `LocationFix.timestampMs` so buffered background
+   * fixes keep the spacing they were recorded with.
+   */
   timeMs: number;
 };
 

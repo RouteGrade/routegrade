@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { AddressAutocomplete } from "@/components/run-tab/address-autocomplete";
+import type { PlaceSuggestion } from "@/lib/api/geocode-suggest";
 import type { Preference } from "@/lib/api/routes-client";
 
 /**
@@ -60,6 +62,10 @@ const MAX_KM = 15;
 export type PlannerHeroProps = {
   address: string;
   onAddressChange: (value: string) => void;
+  /** A suggestion was tapped — carries coordinates, so no re-geocode is needed. */
+  onAddressPick: (place: PlaceSuggestion) => void;
+  /** Runner's last known position, used to rank suggestions by proximity. */
+  near?: { latitude: number; longitude: number } | null;
   onLocate: () => void;
   locating: boolean;
   distanceKm: number;
@@ -76,6 +82,8 @@ export type PlannerHeroProps = {
 export function PlannerHero({
   address,
   onAddressChange,
+  onAddressPick,
+  near,
   onLocate,
   locating,
   distanceKm,
@@ -105,14 +113,15 @@ export function PlannerHero({
             <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
             <circle cx="12" cy="10" r="3" />
           </svg>
-          <input
+          <AddressAutocomplete
             id="start-address"
-            type="text"
             value={address}
-            onChange={(e) => onAddressChange(e.target.value)}
+            onChange={onAddressChange}
+            onPick={onAddressPick}
+            near={near}
             placeholder="Nathan Phillips Square, Toronto"
             aria-label="Starting point"
-            className="h-full min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-faint"
+            className="h-full w-full bg-transparent text-base text-ink outline-none placeholder:text-faint"
           />
           <button
             type="button"

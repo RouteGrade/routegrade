@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>RouteGrade — no bundle</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 32px;
+        background: #0a0a0a;
+        color: #fafafa;
+        font-family: -apple-system, system-ui, sans-serif;
+        text-align: center;
+      }
+      p {
+        margin: 0;
+        max-width: 34ch;
+        color: #8c8c8c;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      code {
+        color: #d8ff3e;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 style="margin: 0; font-size: 19px">No web bundle</h1>
+    <p>
+      This placeholder exists so <code>cap sync</code> has an entry point. The
+      native shell currently runs in live-reload mode and loads the Next dev
+      server over your LAN, so you should never see this screen on device.
+    </p>
+    <p>
+      If you are seeing it, <code>CAP_SERVER_URL</code> was unset when the
+      project was last synced. Static export replaces this file once Supabase
+      auth moves out of server components.
+    </p>
+  </body>
+</html>

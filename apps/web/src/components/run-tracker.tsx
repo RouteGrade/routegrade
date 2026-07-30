@@ -9,13 +9,18 @@ import { saveRun, type RunSplit } from "@/lib/api/runs-client";
 import {
   formatDuration,
   formatPace,
-  haversineMeters,
   OFF_ROUTE_M,
   pathLengthMeters,
   projectOntoPath,
   spokenPace,
   type LngLat,
 } from "@/lib/geo";
+import {
+  selectLocationSource,
+  type LocationError,
+  type LocationFix,
+  type LocationSource,
+} from "@/lib/location";
 import {
   applyFix,
   initialDistanceState,
@@ -53,7 +58,12 @@ const BACK_ON_ROUTE_M = 30;
 // Rolling window for "current pace".
 const PACE_WINDOW_MS = 40_000;
 
-const SIM_SPEED_MPS = 3.2; // ~5:12/km, a friendly training pace
+/** Runner-facing copy for each way a location source can fail. */
+const GPS_ERROR_COPY: Record<LocationError["kind"], string> = {
+  "permission-denied": "Location permission denied — allow it to track your run.",
+  unsupported: "Location isn't available in this browser.",
+  unavailable: "Waiting for a GPS signal…",
+};
 
 /**
  * iOS/Safari only allow speech after a user gesture. Call this from the
@@ -67,23 +77,6 @@ export function primeSpeech() {
   } catch {
     // Speech is a nice-to-have; never block the run on it.
   }
-}
-
-/** Point `target` meters along the path — powers the dev simulation mode. */
-function pointAtDistanceM(coords: LngLat[], target: number): LngLat {
-  let walked = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const seg = haversineMeters(coords[i - 1], coords[i]);
-    if (walked + seg >= target && seg > 0) {
-      const t = (target - walked) / seg;
-      return [
-        coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
-        coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
-      ];
-    }
-    walked += seg;
-  }
-  return coords[coords.length - 1];
 }
 
 export default function RunTracker({
@@ -125,6 +118,10 @@ export default function RunTracker({
   const phaseRef = useRef<Phase>("countdown");
   const mutedRef = useRef(false);
   const distanceStateRef = useRef<DistanceState>(initialDistanceState());
+  // Timestamp of the newest fix we've taken, for the ordering guard in
+  // handleFix. Distinct from the accumulator's anchor, which deliberately stays
+  // put on a rejected fix — see lib/run-distance.ts.
+  const lastFixTimeRef = useRef<number | null>(null);
   const distanceRef = useRef(0);
   const traveledRef = useRef<LngLat[]>([]);
   const samplesRef = useRef<{ timeMs: number; distanceM: number }[]>([]);
@@ -135,9 +132,12 @@ export default function RunTracker({
   const resumedAtRef = useRef<number | null>(null);
   const startedAtRef = useRef<string | null>(null);
   const runIdRef = useRef<string>("");
-  const watchIdRef = useRef<number | null>(null);
+  const sourceRef = useRef<LocationSource | null>(null);
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
-  const simulate = useRef(false);
+  // Drives whether the run needs a screen wake lock. Starts true so we never
+  // acquire one before knowing which source we got; the effect below corrects
+  // it as soon as the source is chosen.
+  const [tracksInBackground, setTracksInBackground] = useState(true);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -165,9 +165,21 @@ export default function RunTracker({
     return (movingMsRef.current + live) / 1000;
   };
 
-  /** Single funnel for every position fix, real or simulated. */
-  const handleFix = (coord: LngLat, accuracyM: number) => {
-    const nowMs = performance.now();
+  /**
+   * Single funnel for every position fix, whatever produced it.
+   *
+   * Timed by `fix.timestampMs` — when the device took the reading — and never
+   * by arrival time. A native background source hands over a whole buffered
+   * batch at once when iOS resumes the app, and timing those by arrival would
+   * squeeze minutes of running into one instant: every step would look like a
+   * teleport and get thrown out by the speed guard in lib/run-distance.
+   */
+  const handleFix = ({ coord, accuracyM, timestampMs: nowMs }: LocationFix) => {
+    // Out-of-order delivery is possible once fixes are buffered; an older fix
+    // than the one we already took would compute a negative interval.
+    const lastTimeMs = lastFixTimeRef.current;
+    if (lastTimeMs !== null && nowMs < lastTimeMs) return;
+    lastFixTimeRef.current = nowMs;
 
     // Always show where the runner is, even fixes we won't count.
     onTelemetry({ position: coord });
@@ -240,52 +252,30 @@ export default function RunTracker({
     }
   };
 
-  // GPS watch (or simulation) runs for the whole tracker lifetime so the fix
-  // is already warm when the countdown hits zero.
+  // The location stream runs for the whole tracker lifetime, not just while
+  // the clock is going, so the first fix is already warm when the countdown
+  // hits zero and the map has somewhere to point during it.
   useEffect(() => {
     runIdRef.current = crypto.randomUUID();
-    simulate.current = new URLSearchParams(window.location.search).has("simulate");
 
-    if (simulate.current) {
-      let simAlongM = 0;
-      const timer = setInterval(() => {
-        if (phaseRef.current === "running") {
-          simAlongM = Math.min(routeLengthM, simAlongM + SIM_SPEED_MPS);
-        }
-        handleFix(pointAtDistanceM(routeCoords, simAlongM), 5);
-      }, 1000);
-      return () => clearInterval(timer);
-    }
+    const source = selectLocationSource({
+      coords: routeCoords,
+      isRunning: () => phaseRef.current === "running",
+    });
+    sourceRef.current = source;
+    setTracksInBackground(source.tracksInBackground);
 
-    if (!("geolocation" in navigator)) {
-      // Deferred so the effect body itself stays setState-free.
-      const timer = setTimeout(
-        () => setGpsError("Location isn't available in this browser."),
-        0,
-      );
-      return () => clearTimeout(timer);
-    }
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
+    source.start({
+      onFix: (fix) => {
         setGpsError(null);
-        handleFix(
-          [position.coords.longitude, position.coords.latitude],
-          position.coords.accuracy ?? 99,
-        );
+        handleFix(fix);
       },
-      (error) => {
-        setGpsError(
-          error.code === error.PERMISSION_DENIED
-            ? "Location permission denied — allow it to track your run."
-            : "Waiting for a GPS signal…",
-        );
-      },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15_000 },
-    );
+      onError: (error) => setGpsError(GPS_ERROR_COPY[error.kind]),
+    });
+
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      sourceRef.current = null;
+      source.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -318,8 +308,14 @@ export default function RunTracker({
   }, [phase]);
 
   // Keep the screen awake mid-run; reacquire when the tab comes back.
+  //
+  // Only for sources that die when the page is suspended. It's a stopgap, not
+  // background tracking: it keeps fixes coming while the runner watches the
+  // screen, at a real battery cost, and still loses the run the moment they
+  // pocket the phone. A source that tracks in the background makes it pure
+  // cost, so it's skipped there.
   useEffect(() => {
-    if (phase !== "running") return;
+    if (phase !== "running" || tracksInBackground) return;
     let cancelled = false;
     const acquire = async () => {
       try {
@@ -346,7 +342,7 @@ export default function RunTracker({
       wakeLockRef.current?.release().catch(() => {});
       wakeLockRef.current = null;
     };
-  }, [phase]);
+  }, [phase, tracksInBackground]);
 
   const pauseRun = () => {
     if (resumedAtRef.current !== null) {
