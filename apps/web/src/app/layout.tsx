@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
+import { NativeAuthListener } from "@/components/auth/native-auth-listener";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import "./globals.css";
 
@@ -63,6 +64,7 @@ export default function RootLayout({
       <body className="h-full bg-canvas font-sans text-ink">
         {children}
         <ServiceWorkerRegistrar />
+        <NativeAuthListener />
       </body>
     </html>
   );

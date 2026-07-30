@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getSiteUrl } from "@/lib/site-url";
+import { startGoogleSignIn } from "@/lib/auth/native-auth";
+import { isNativePlatform } from "@/lib/location";
 
 export function GoogleSignInButton({ next }: { next?: string }) {
   const [busy, setBusy] = useState(false);
@@ -13,19 +13,18 @@ export function GoogleSignInButton({ next }: { next?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      const params = new URLSearchParams();
-      if (next) params.set("next", next);
-      const redirectTo = `${getSiteUrl()}/auth/callback${params.toString() ? `?${params}` : ""}`;
-      const { error: err } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo },
-      });
+      const err = await startGoogleSignIn(next);
       if (err) {
-        setError("Could not start Google sign-in. Please try again.");
+        setError(err);
         setBusy(false);
+        return;
       }
-      // On success, Supabase redirects the browser; do NOT reset busy.
+      // Web: Supabase has navigated the tab away, so leave `busy` set.
+      // Native: the in-app browser is now covering the app and the result
+      // arrives via NativeAuthListener. Clear `busy` so the button is usable
+      // again if the runner dismisses that sheet instead of signing in —
+      // otherwise it stays stuck on "Redirecting…" forever.
+      if (isNativePlatform()) setBusy(false);
     } catch {
       setError("Could not start Google sign-in. Please try again.");
       setBusy(false);

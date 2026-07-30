@@ -10,6 +10,25 @@
         <string>RouteGrade</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<!-- Custom URL scheme that returns an OAuth / magic-link callback into the
+	     app instead of leaving the user stranded in Safari on the web build.
+	     Deliberately a custom scheme rather than a Universal Link: Universal
+	     Links need the Associated Domains entitlement, which Apple does not
+	     grant to free personal teams. Must also be added to Supabase's
+	     Authentication > URL Configuration redirect allow-list. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.routegrade.app</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.routegrade.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>

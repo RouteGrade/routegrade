@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { authRedirectTo } from "@/lib/auth/native-auth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getSiteUrl } from "@/lib/site-url";
 
 type Status = "idle" | "sending" | "sent";
 
@@ -25,12 +25,12 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
     setError(null);
     try {
       const supabase = createSupabaseBrowserClient();
-      const params = new URLSearchParams();
-      if (next) params.set("next", next);
-      const emailRedirectTo = `${getSiteUrl()}/auth/callback${params.toString() ? `?${params}` : ""}`;
+      // In the native shell this resolves to the app's custom scheme, so
+      // tapping the emailed link hands off from Safari back into the app
+      // instead of stranding the runner on the web build.
       const { error: err } = await supabase.auth.signInWithOtp({
         email: trimmed,
-        options: { emailRedirectTo },
+        options: { emailRedirectTo: authRedirectTo(next) },
       });
       if (err) {
         // Deliberately vague — do not disclose whether the email is registered.
