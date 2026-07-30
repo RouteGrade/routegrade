@@ -26,6 +26,12 @@
   --color-volt-dim: #9fbb2c;
   --color-volt-wash: rgba(216, 255, 62, 0.12);
 
+  /* Brand mark only — the logo tile and the animated loader that echoes it.
+     Deliberately not part of the UI palette: volt above is still the one
+     accent, and these two must never be used for buttons or state. */
+  --color-brand: #18ccd4;
+  --color-brand-ink: #0b1017;
+
   /* Reserved semantics — used sparingly, never as decoration. */
   --color-danger: #ff5a5a;
   --color-danger-wash: rgba(255, 90, 90, 0.12);
@@ -372,6 +378,146 @@ body {
   }
   .scorecard-sheen {
     display: none;
+  }
+}
+
+/* --- Animated brand mark (loading) ----------------------------------------
+
+   The logo is a route: it starts at a dot, runs through the R stem and the G
+   bowl, and finishes on an arrow. So the loading state just draws it, which
+   reads as "plotting a route" rather than as a generic spinner. Two strokes
+   in sequence — the route, then the arrow — then the whole mark fades and the
+   cycle repeats.
+
+   `stroke-dasharray` is set to a length comfortably longer than either path
+   so neither needs a measured getTotalLength() at runtime.
+--------------------------------------------------------------------------- */
+
+.rg-loader-route {
+  stroke-dasharray: 300;
+  stroke-dashoffset: 300;
+  animation: rg-loader-route 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.rg-loader-arrow {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: rg-loader-arrow 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.rg-loader-dot {
+  transform-origin: 25px 79px;
+  animation: rg-loader-dot 2.4s ease-in-out infinite;
+}
+
+@keyframes rg-loader-route {
+  0% {
+    stroke-dashoffset: 300;
+  }
+  45%,
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes rg-loader-arrow {
+  0%,
+  45% {
+    stroke-dashoffset: 48;
+  }
+  64%,
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes rg-loader-dot {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  8%,
+  82% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* One-shot variant, used by the app-open splash. The looping version fades the
+   mark out at the end of every cycle, which is right for an indeterminate wait
+   but wrong here: the overlay itself fades once the draw completes, and a loop
+   would be caught mid-stroke. Draws once and holds. */
+.rg-loader-once .rg-loader-route {
+  animation: rg-loader-route-once 1.25s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+.rg-loader-once .rg-loader-arrow {
+  animation: rg-loader-arrow-once 1.25s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+.rg-loader-once .rg-loader-dot {
+  animation: rg-loader-dot-once 1.25s ease-out forwards;
+}
+
+@keyframes rg-loader-route-once {
+  from {
+    stroke-dashoffset: 300;
+  }
+  60%,
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rg-loader-arrow-once {
+  0%,
+  60% {
+    stroke-dashoffset: 48;
+  }
+  95%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rg-loader-dot-once {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  12%,
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion still needs a *visible* loading state, so the mark is shown
+   fully drawn and still rather than hidden outright. */
+@media (prefers-reduced-motion: reduce) {
+  .rg-loader-route,
+  .rg-loader-arrow,
+  .rg-loader-dot,
+  .rg-loader-once .rg-loader-route,
+  .rg-loader-once .rg-loader-arrow,
+  .rg-loader-once .rg-loader-dot {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 
