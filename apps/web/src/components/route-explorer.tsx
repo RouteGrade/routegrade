@@ -101,6 +101,12 @@ export default function RouteExplorer({
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [address, setAddress] = useState("");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  // Coordinates of a tapped address suggestion. Lets the plan request name an
+  // exact point instead of re-geocoding the text, which can otherwise resolve
+  // to a different place than the one the runner picked.
+  const [pickedPlace, setPickedPlace] = useState<
+    { latitude: number; longitude: number } | null
+  >(null);
   // Where to point the map camera — set to the runner's location on first load.
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [distanceKm, setDistanceKm] = useState(5);
@@ -414,7 +420,13 @@ export default function RouteExplorer({
       const response = await planRoute({
         ...(usingCoords
           ? { latitude: coords.latitude, longitude: coords.longitude, address: trimmed }
-          : { address: trimmed }),
+          : pickedPlace
+            ? {
+                latitude: pickedPlace.latitude,
+                longitude: pickedPlace.longitude,
+                address: trimmed,
+              }
+            : { address: trimmed }),
         distance_km: distanceKm,
         preference,
       });
@@ -719,7 +731,23 @@ export default function RouteExplorer({
           onAddressChange={(value) => {
             setAddress(value);
             setCoords(null);
+            setPickedPlace(null);
           }}
+          onAddressPick={(place) => {
+            setAddress(place.label);
+            setPickedPlace({
+              latitude: place.latitude,
+              longitude: place.longitude,
+            });
+            // Move the camera to the picked place so the map confirms the
+            // choice before the runner commits to planning from it.
+            setMapCenter([place.longitude, place.latitude]);
+          }}
+          near={
+            mapCenter
+              ? { latitude: mapCenter[1], longitude: mapCenter[0] }
+              : null
+          }
           onLocate={handleUseMyLocation}
           locating={locating}
           distanceKm={distanceKm}
