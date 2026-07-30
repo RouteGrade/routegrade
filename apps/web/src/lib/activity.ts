@@ -3,10 +3,11 @@ import type { RecordedRun, RunSplit } from "@/lib/api/runs-client";
 /**
  * Presentation logic for the Activity tab.
  *
- * Pure and derived-only: lifetime totals are computed from the run list the API
- * already returns (`GET /v1/users/me/runs` includes `splits` and `path`), so the
- * tab needs no aggregate endpoint. If run history ever outgrows a single
- * response, this is the seam to replace with a server-side summary.
+ * Pure and derived-only: totals are computed from the run list the API already
+ * returns (`GET /v1/users/me/runs` includes `splits` and `path`), so the tab
+ * needs no aggregate endpoint. If run history ever outgrows a single response,
+ * this is the seam to replace with a server-side summary — note that period
+ * scoping would have to move server-side with it.
  */
 
 export type ActivityTotals = {
@@ -36,6 +37,69 @@ export function summarizeRuns(runs: RecordedRun[]): ActivityTotals {
     // let a 1 km jog outweigh a 20 km long run.
     avgPaceSPerKm: distanceKm > 0 ? Math.round(durationS / distanceKm) : null,
   };
+}
+
+/**
+ * The windows the Activity tab totals over. Lifetime deliberately isn't one —
+ * that figure belongs to the You tab, and having both tabs report it made the
+ * same four numbers appear twice in the app.
+ */
+export const PERIODS = ["week", "month", "year"] as const;
+
+export type Period = (typeof PERIODS)[number];
+
+export const PERIOD_LABEL: Record<Period, string> = {
+  week: "This week",
+  month: "This month",
+  year: "This year",
+};
+
+/**
+ * Start of the calendar period containing `now`, in the viewer's own timezone —
+ * a runner's "this week" is the one they lived, not a UTC one.
+ *
+ * Weeks start Monday: a Sunday long run belongs to the week it finished, and
+ * treating it as the start of a new week splits most training weeks in half.
+ */
+export function periodStart(period: Period, now: Date): Date {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (period === "week") {
+    // getDay() is 0 for Sunday, which is 6 days into a Monday-first week.
+    const daysSinceMonday = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - daysSinceMonday);
+  } else if (period === "month") {
+    start.setDate(1);
+  } else {
+    start.setMonth(0, 1);
+  }
+
+  return start;
+}
+
+/** Runs started within the calendar period containing `now`. */
+export function runsWithin(
+  runs: RecordedRun[],
+  period: Period,
+  now: Date,
+): RecordedRun[] {
+  const start = periodStart(period, now).getTime();
+  return runs.filter((run) => {
+    const startedAt = new Date(run.started_at).getTime();
+    // A run with an unparseable date is dropped from period views rather than
+    // silently counted into whichever period NaN happens to fall outside.
+    return Number.isFinite(startedAt) && startedAt >= start;
+  });
+}
+
+/** Totals over one calendar period — the same shape as lifetime totals. */
+export function summarizePeriod(
+  runs: RecordedRun[],
+  period: Period,
+  now: Date,
+): ActivityTotals {
+  return summarizeRuns(runsWithin(runs, period, now));
 }
 
 export type SplitRow = {

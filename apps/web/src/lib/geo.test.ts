@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDuration,
   formatPace,
+  formatTotalTime,
   haversineMeters,
   OFF_ROUTE_M,
   pathLengthMeters,
@@ -199,6 +200,21 @@ describe("formatDuration", () => {
 
   it("formats hour-plus durations as h:mm:ss", () => {
     expect(formatDuration(3727)).toBe("1:02:07");
+  });
+});
+
+describe("formatTotalTime", () => {
+  it("reads a lifetime total as hours and minutes", () => {
+    expect(formatTotalTime(1485200)).toBe("412h 33m");
+  });
+
+  it("drops the hour part below an hour", () => {
+    expect(formatTotalTime(2700)).toBe("45m");
+  });
+
+  it("floors rather than rounding up a partial minute", () => {
+    expect(formatTotalTime(119)).toBe("1m");
+    expect(formatTotalTime(0)).toBe("0m");
   });
 });
 

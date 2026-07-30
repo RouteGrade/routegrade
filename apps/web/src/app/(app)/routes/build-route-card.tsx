@@ -13,7 +13,7 @@ export function BuildRouteCard() {
       href="/?build=1"
       className="group flex items-center gap-4 rounded-card border border-hairline bg-surface p-5 transition-colors hover:border-hairline-strong"
     >
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-volt text-canvas">
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-canvas">
         <svg
           viewBox="0 0 24 24"
           fill="none"

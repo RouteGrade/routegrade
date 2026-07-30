@@ -32,8 +32,14 @@ const pauseButton = (page: Page) => page.getByRole("button", { name: "Pause run"
 const resumeButton = (page: Page) => page.getByRole("button", { name: "Resume run" });
 const finishButton = (page: Page) => page.getByRole("button", { name: "Finish run" });
 const startRunButton = (page: Page) => page.getByRole("button", { name: "Start run" });
-/** The large live/summary distance readout (`km.toFixed(2)`). */
-const distanceReadout = (page: Page) => page.locator("span.font-display.text-6xl").first();
+/**
+ * The large live distance readout (`km.toFixed(2)`).
+ *
+ * Addressed by test id, not by its classes: this used to select on
+ * `span.font-display.text-6xl`, which coupled the suite to the type scale and
+ * broke the moment the run screen was restyled.
+ */
+const distanceReadout = (page: Page) => page.getByTestId("run-distance");
 
 async function readDistanceKm(page: Page): Promise<number> {
   const text = await distanceReadout(page).textContent();

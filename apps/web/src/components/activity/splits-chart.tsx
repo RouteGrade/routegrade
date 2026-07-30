@@ -63,7 +63,7 @@ export function SplitsChart({ splits }: { splits: RunSplit[] }) {
                     <div
                       className={`absolute top-1/2 h-2 -translate-y-1/2 ${
                         faster ? "rounded-l-full" : "rounded-r-full"
-                      } ${row.fastest ? "bg-volt" : "bg-muted"}`}
+                      } ${row.fastest ? "bg-accent" : "bg-muted"}`}
                       style={
                         faster
                           ? { right: "50%", width }
@@ -77,7 +77,7 @@ export function SplitsChart({ splits }: { splits: RunSplit[] }) {
                 </td>
                 <td className="w-14 py-1 pl-2 text-right text-[11px] tabular-nums text-faint">
                   {row.fastest ? (
-                    <span className="font-bold uppercase tracking-wider text-volt">
+                    <span className="font-bold uppercase tracking-wider text-accent">
                       Fastest
                     </span>
                   ) : delta === 0 ? (
