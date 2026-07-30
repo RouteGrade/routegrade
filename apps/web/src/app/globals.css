@@ -21,10 +21,13 @@
   --color-muted: #8c8c8c;
   --color-faint: #5c5c5c;
 
-  /* The one accent. Volt reads as "go" and survives on near-black at any size. */
-  --color-volt: #d8ff3e;
-  --color-volt-dim: #9fbb2c;
-  --color-volt-wash: rgba(216, 255, 62, 0.12);
+  /* The one accent — the brand mark's own cyan (public/logo.svg is #18CCD4 on
+     #0B1017), so the app and the logo finally read as one thing. The token is
+     named for its ROLE, not its hue: the previous name (`volt`) described a
+     lime green and stopped being true the moment the palette moved. */
+  --color-accent: #18ccd4;
+  --color-accent-dim: #12969c;
+  --color-accent-wash: rgba(24, 204, 212, 0.12);
 
   /* Brand mark only — the logo tile and the animated loader that echoes it.
      Deliberately not part of the UI palette: volt above is still the one
@@ -35,7 +38,11 @@
   /* Reserved semantics — used sparingly, never as decoration. */
   --color-danger: #ff5a5a;
   --color-danger-wash: rgba(255, 90, 90, 0.12);
-  --color-runner: #4cc3ff;
+  /* The runner dot on the map. Was #4cc3ff, which sat a few degrees off the new
+     cyan accent and made "you" and "your route" the same colour — now neutral
+     white, which is the one thing on a dark map that can't be confused for
+     the route line. */
+  --color-runner: #ffffff;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-archivo), var(--font-inter), ui-sans-serif, sans-serif;
@@ -92,7 +99,7 @@ body {
 }
 
 /* --- Controls --------------------------------------------------------------
-   One primary button style (volt pill, black label) and one secondary
+   One primary button style (accent pill, black label) and one secondary
    (transparent, hairline border). Both are 52px tall — comfortably above the
    44px touch-target floor, since this app is used mid-run with one thumb.
 --------------------------------------------------------------------------- */
@@ -124,12 +131,13 @@ body {
 }
 
 .rg-btn-primary {
-  background-color: var(--color-volt);
+  background-color: var(--color-accent);
   color: #0a0a0a;
 }
 
 .rg-btn-primary:hover:not(:disabled) {
-  background-color: #e4ff66;
+  /* A lift of the accent, not a separate colour. */
+  background-color: #3fdce3;
 }
 
 .rg-btn-secondary {
@@ -149,9 +157,9 @@ body {
   border-radius: var(--radius-card);
 }
 
-/* Focus ring — volt, visible on every surface, keyboard-only. */
+/* Focus ring — accent, visible on every surface, keyboard-only. */
 :focus-visible {
-  outline: 2px solid var(--color-volt);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -168,17 +176,17 @@ body {
   position: absolute;
   inset: 4px;
   border-radius: 9999px;
-  background: var(--color-volt);
+  background: var(--color-accent);
   box-shadow:
     0 0 0 2px rgba(10, 10, 10, 0.9),
-    0 0 14px rgba(216, 255, 62, 0.8);
+    0 0 14px rgba(24, 204, 212, 0.8);
 }
 
 .start-marker-ring {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: rgba(216, 255, 62, 0.45);
+  background: rgba(24, 204, 212, 0.45);
   animation: marker-pulse 1.8s ease-out infinite;
 }
 
@@ -199,8 +207,8 @@ body {
   border-radius: 9999px;
   background: radial-gradient(
     circle,
-    rgba(216, 255, 62, 0.55) 0%,
-    rgba(216, 255, 62, 0.2) 45%,
+    rgba(24, 204, 212, 0.55) 0%,
+    rgba(24, 204, 212, 0.2) 45%,
     transparent 70%
   );
   animation: tip-glow 1.1s ease-in-out infinite alternate;
@@ -213,8 +221,8 @@ body {
   border-radius: 9999px;
   background: var(--color-ink);
   box-shadow:
-    0 0 0 2px rgba(216, 255, 62, 0.9),
-    0 0 12px rgba(216, 255, 62, 0.9);
+    0 0 0 2px rgba(24, 204, 212, 0.9),
+    0 0 12px rgba(24, 204, 212, 0.9);
 }
 
 .tip-marker-done {
@@ -244,7 +252,7 @@ body {
   }
 }
 
-/* Live runner position during a run — deliberately NOT volt, so "where I am"
+/* Live runner position during a run — deliberately NOT accent, so "where I am"
    never reads as the same thing as "the route". */
 .runner-marker {
   position: relative;
@@ -257,16 +265,73 @@ body {
   inset: 4px;
   border-radius: 9999px;
   background: var(--color-runner);
-  border: 2.5px solid var(--color-ink);
-  box-shadow: 0 0 12px rgba(76, 195, 255, 0.9);
+  /* Dark collar, not a light one: the dot itself is now the light element, so
+     it needs separating from the map rather than from its own border. */
+  border: 2.5px solid var(--color-canvas);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.75);
 }
 
 .runner-marker-ring {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: rgba(76, 195, 255, 0.45);
+  background: rgba(255, 255, 255, 0.4);
   animation: marker-pulse 2s ease-out infinite;
+}
+
+/* --- Brand loader ----------------------------------------------------------
+   The logo doubling as a progress meter: a dim copy of the mark with a
+   full-colour copy rising through it. `clip-path` is what moves, so the mark's
+   own artwork is never distorted — no scaling, no masking that would soften
+   the glyph's edges.
+--------------------------------------------------------------------------- */
+
+.brand-loader {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.brand-loader-base {
+  opacity: 0.18;
+}
+
+.brand-loader-fill {
+  position: absolute;
+  inset: 0;
+  /* Determinate mode overrides this inline; the collapsed default means a
+     just-mounted loader starts empty rather than flashing full. */
+  clip-path: inset(100% 0 0 0);
+}
+
+.brand-loader-indeterminate .brand-loader-fill {
+  animation: brand-fill 1.7s ease-in-out infinite;
+}
+
+/* Rises from the bottom, fills, then keeps going and exits through the top —
+   a continuous charge rather than a fill that snaps back to empty. */
+@keyframes brand-fill {
+  0% {
+    clip-path: inset(100% 0 0 0);
+  }
+  45% {
+    clip-path: inset(0 0 0 0);
+  }
+  55% {
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 100% 0);
+  }
+}
+
+/* Motion is the whole mechanism here, so reduced-motion gets a static
+   part-filled mark instead: still legible as "busy", nothing moving. */
+@media (prefers-reduced-motion: reduce) {
+  .brand-loader-indeterminate .brand-loader-fill {
+    animation: none;
+    clip-path: inset(45% 0 0 0);
+  }
 }
 
 /* --- Motion --------------------------------------------------------------- */
@@ -531,8 +596,8 @@ input[type="range"].rg-slider {
   border-radius: 9999px;
   background: linear-gradient(
     to right,
-    var(--color-volt) 0%,
-    var(--color-volt) var(--slider-progress, 30%),
+    var(--color-accent) 0%,
+    var(--color-accent) var(--slider-progress, 30%),
     rgba(255, 255, 255, 0.12) var(--slider-progress, 30%),
     rgba(255, 255, 255, 0.12) 100%
   );
@@ -545,7 +610,7 @@ input[type="range"].rg-slider::-webkit-slider-thumb {
   width: 22px;
   height: 22px;
   border-radius: 9999px;
-  background: var(--color-volt);
+  background: var(--color-accent);
   border: none;
   cursor: pointer;
   transition: transform 0.15s ease;
@@ -559,7 +624,7 @@ input[type="range"].rg-slider::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border-radius: 9999px;
-  background: var(--color-volt);
+  background: var(--color-accent);
   border: none;
   cursor: pointer;
 }

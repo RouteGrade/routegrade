@@ -8,7 +8,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import String, engine_from_config, pool
 
 # Make the services/api/ directory importable so `app.*` resolves.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -38,6 +38,8 @@ if not database_url:
     )
 config.set_main_option("sqlalchemy.url", database_url)
 
+from app.db.alembic_meta import VERSION_NUM_LENGTH  # noqa: E402
+
 target_metadata = Base.metadata
 
 
@@ -59,6 +61,7 @@ def run_migrations_offline() -> None:
         dialect_opts={"paramstyle": "named"},
         include_object=_include_object,
         include_schemas=False,
+        version_table_column_type=String(VERSION_NUM_LENGTH),
     )
 
     with context.begin_transaction():
@@ -78,6 +81,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             include_object=_include_object,
             include_schemas=False,
+            version_table_column_type=String(VERSION_NUM_LENGTH),
         )
 
         with context.begin_transaction():

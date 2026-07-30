@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { PlannedRoute } from "@/lib/api/routes-client";
 import { GRADE_META, deriveReasons, type Grade } from "@/lib/scorecard";
+import { GradeFeedback } from "./grade-feedback";
 
 /**
  * The route detail screen: what you get after RouteGrade finds you something.
@@ -83,7 +84,7 @@ export function RouteDetail({
                 onClick={() => onSelectCandidate(index)}
                 className={`flex-1 rounded-full border px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                   index === activeIndex
-                    ? "border-volt bg-volt-wash text-volt"
+                    ? "border-accent bg-accent-wash text-accent"
                     : "border-hairline text-muted hover:border-hairline-strong hover:text-ink"
                 }`}
               >
@@ -96,7 +97,7 @@ export function RouteDetail({
         {/* The grade, loudest thing on the screen. */}
         <div className="flex items-center gap-5">
           <span
-            className="rg-display text-[88px] leading-[0.8] text-volt"
+            className="rg-display text-[88px] leading-[0.8] text-accent"
             style={meta ? { color: meta.hexFrom } : undefined}
           >
             {route.grade}
@@ -116,7 +117,7 @@ export function RouteDetail({
             {route.name}
           </h2>
           {route.provider === "saved" ? (
-            <span className="shrink-0 rounded-full border border-volt/40 bg-volt-wash px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-volt">
+            <span className="shrink-0 rounded-full border border-accent/40 bg-accent-wash px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-accent">
               Saved
             </span>
           ) : !route.within_tolerance ? (
@@ -159,7 +160,7 @@ export function RouteDetail({
                     </span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                       <div
-                        className="h-full rounded-full bg-volt"
+                        className="h-full rounded-full bg-accent"
                         style={{ width: `${Math.round(factor.value)}%` }}
                       />
                     </div>
@@ -185,6 +186,22 @@ export function RouteDetail({
             )}
           </section>
         )}
+
+        {/* Only on a saved route the runner owns: the feedback endpoint keys
+            on a saved-route id, so offering this on an unsaved plan would 404
+            the moment they pressed send. */}
+        {isAuthenticated && route.provider === "saved" && (
+          <GradeFeedback
+            routeId={route.id}
+            gradedScore={Number.isFinite(route.score) ? route.score : null}
+            gradedGrade={(route.grade as Grade) ?? null}
+            // PlannedRoute doesn't carry `preference` — it lives on SavedRoute
+            // and is dropped when one is mapped into this view. The API treats
+            // the snapshot as optional, so send null rather than guess a
+            // preference the runner never chose here.
+            preference={null}
+          />
+        )}
       </div>
 
       {/* Actions stay pinned: on a long breakdown, "start run" must never be
@@ -206,7 +223,7 @@ export function RouteDetail({
               disabled={saving || saved}
               className={`rg-btn flex-1 ${
                 saved
-                  ? "cursor-default border border-volt/40 bg-volt-wash text-volt"
+                  ? "cursor-default border border-accent/40 bg-accent-wash text-accent"
                   : "rg-btn-secondary disabled:cursor-wait"
               }`}
             >

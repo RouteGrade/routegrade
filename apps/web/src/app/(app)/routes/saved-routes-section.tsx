@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BrandLoader } from "@/components/brand/brand-loader";
 import { EmptyState } from "@/components/shell/screen";
 import { ApiError } from "@/lib/api/authenticated-client";
 import {
@@ -62,11 +63,17 @@ export function SavedRoutesSection() {
   return (
     <>
       {state.kind === "loading" && (
-        <p className="text-sm text-muted">Loading your routes…</p>
+        <BrandLoader label="Loading your routes" />
       )}
 
+      {/* role="alert" so the failure is announced, matching the delete error
+          below and the other two account tabs. Without it a screen-reader user
+          got silence on the load failure while still hearing the delete one,
+          which is the wrong way round. */}
       {state.kind === "error" && (
-        <p className="text-sm text-danger">{state.message}</p>
+        <p role="alert" className="text-sm text-danger">
+          {state.message}
+        </p>
       )}
 
       {state.kind === "ready" && state.routes.length === 0 && (
@@ -84,7 +91,7 @@ export function SavedRoutesSection() {
               key={route.id}
               className="group flex items-center gap-4 rounded-card border border-hairline bg-surface p-4 transition-colors hover:border-hairline-strong"
             >
-              <span className="rg-display flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-volt text-lg text-canvas">
+              <span className="rg-display flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-lg text-canvas">
                 {route.grade}
               </span>
               <Link href={`/?route=${route.id}`} className="min-w-0 flex-1">
