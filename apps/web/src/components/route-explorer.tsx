@@ -19,6 +19,11 @@ import {
 } from "@/lib/api/routes-client";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { useImmersive } from "./shell/app-shell";
+import {
+  formatCoordLabel,
+  planBuilderPoints,
+  reorder,
+} from "@/lib/route-builder";
 import { PlannerHero } from "./run-tab/planner-hero";
 import { RouteDetail } from "./route-detail/route-detail";
 import { RouteScorecard } from "./route-scorecard";
@@ -135,6 +140,13 @@ export default function RouteExplorer({
   const [startAddr, setStartAddr] = useState("");
   const [endAddr, setEndAddr] = useState("");
   const [stops, setStops] = useState<string[]>([]);
+  // A GPS fix pinned as the start, plus the exact label written into the field.
+  // Honoured only while the field still reads as the pin left it — see
+  // planBuilderPoints.
+  const [pinnedStart, setPinnedStart] = useState<{
+    coord: [number, number];
+    label: string;
+  } | null>(null);
   const [loopMode, setLoopMode] = useState(false);
   const [building, setBuilding] = useState(false);
   const [builderError, setBuilderError] = useState<string | null>(null);
@@ -299,22 +311,59 @@ export default function RouteExplorer({
     setStops((s) => s.filter((_, idx) => idx !== i));
   const setStop = (i: number, value: string) =>
     setStops((s) => s.map((v, idx) => (idx === i ? value : v)));
+  const moveStop = (from: number, to: number) =>
+    setStops((s) => reorder(s, from, to));
+
+  /** Pin the runner's current position as the start point. */
+  const useMyLocation = () => {
+    if (locating) return;
+    if (!navigator.geolocation) {
+      setBuilderError("This browser can't share your location — type an address.");
+      return;
+    }
+    setLocating(true);
+    setBuilderError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coord: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+        const label = formatCoordLabel(coord);
+        setPinnedStart({ coord, label });
+        setStartAddr(label);
+        setMapCenter(coord);
+        setLocating(false);
+      },
+      () => {
+        // Denied, unavailable, or timed out all land here and are equally
+        // recoverable by typing, so they get one honest message.
+        setBuilderError(
+          "Couldn't get your location. Allow location access, or type a start address.",
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  };
 
   const buildAddressRoute = async () => {
-    const addresses = [startAddr, ...stops, endAddr]
-      .map((a) => a.trim())
-      .filter(Boolean);
-    if (addresses.length < 2) {
-      setBuilderError("Enter at least a start and an end.");
+    const plan = planBuilderPoints(startAddr, stops, endAddr, pinnedStart);
+    if (!plan.ok) {
+      setBuilderError(plan.error);
       return;
     }
     setBuilding(true);
     setBuilderError(null);
     try {
-      const results = await Promise.all(addresses.map((a) => geocodeAddress(a)));
-      const points = results.map(
+      const results = await Promise.all(
+        plan.toGeocode.map((a) => geocodeAddress(a)),
+      );
+      const geocoded = results.map(
         (r) => [r.longitude, r.latitude] as [number, number],
       );
+      // A pinned GPS start is already a point, so it skips the geocoder
+      // entirely and goes back on the front of the list.
+      const points = plan.pinnedStart
+        ? [plan.pinnedStart, ...geocoded]
+        : geocoded;
       setMapCenter(points[0]);
       await draw.buildFromWaypoints(points, loopMode);
     } catch (err) {
@@ -524,13 +573,36 @@ export default function RouteExplorer({
                 Cancel
               </button>
             </div>
-            <input
-              type="text"
-              value={startAddr}
-              onChange={(e) => setStartAddr(e.target.value)}
-              placeholder="Start address"
-              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={startAddr}
+                onChange={(e) => {
+                  setStartAddr(e.target.value);
+                  // Editing the field means an address, not the old fix.
+                  setPinnedStart(null);
+                }}
+                placeholder="Start address"
+                className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={useMyLocation}
+                disabled={locating}
+                aria-label="Use my location as the start"
+                title="Use my location"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control border transition disabled:opacity-50 ${
+                  pinnedStart
+                    ? "border-accent bg-accent-wash text-accent"
+                    : "border-hairline bg-raised text-muted hover:text-ink"
+                }`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v3M12 19v3M22 12h-3M5 12H2" />
+                </svg>
+              </button>
+            </div>
             {stops.map((stop, i) => (
               <div key={i} className="flex gap-2">
                 <input
@@ -540,6 +612,32 @@ export default function RouteExplorer({
                   placeholder={`Stop ${i + 1}`}
                   className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
+                {/* Up/down rather than drag: this is a touch-first app, and
+                    HTML5 drag-and-drop does not fire on touch at all. Buttons
+                    also work from the keyboard and announce themselves, which
+                    a drag handle does not. */}
+                <button
+                  type="button"
+                  onClick={() => moveStop(i, i - 1)}
+                  disabled={i === 0}
+                  aria-label={`Move stop ${i + 1} up`}
+                  className="flex h-10 w-8 shrink-0 items-center justify-center rounded-control border border-hairline bg-raised text-muted transition hover:text-ink disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="m18 15-6-6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveStop(i, i + 1)}
+                  disabled={i === stops.length - 1}
+                  aria-label={`Move stop ${i + 1} down`}
+                  className="flex h-10 w-8 shrink-0 items-center justify-center rounded-control border border-hairline bg-raised text-muted transition hover:text-ink disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
                 <button
                   type="button"
                   onClick={() => removeStop(i)}
