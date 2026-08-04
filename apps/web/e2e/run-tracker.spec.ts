@@ -51,6 +51,15 @@ async function gotoPlanner(page: Page): Promise<void> {
   await mockRoutePlanning(page);
   await blockExternalRequests(page);
   await stubSpeechSynthesis(page);
+  // The sign-in gate (proxy.ts) 307s a cookieless visitor from "/" to
+  // "/login", so without this the planner never mounts and every locator below
+  // times out. The gate is a no-op when Supabase env is unset, which is why
+  // this suite still passed in CI while failing anywhere the app is actually
+  // configured — it was green for the wrong reason. address-route.spec.ts has
+  // always set this cookie; this suite simply never did.
+  await page.context().addCookies([
+    { name: "rg_guest", value: "1", url: "http://localhost:3000" },
+  ]);
   // Clock must be installed before the page's scripts run so the tracker's
   // timers are the mocked ones.
   await page.clock.install();
