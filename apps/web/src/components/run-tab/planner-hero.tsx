@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ActivityIcon } from "@/components/activity/activity-icon";
 import { AddressAutocomplete } from "@/components/run-tab/address-autocomplete";
 import { activityCopy } from "@/lib/activity-type";
 import {
@@ -14,29 +15,7 @@ import {
 import type { PlaceSuggestion } from "@/lib/api/geocode-suggest";
 import type { Activity, Preference } from "@/lib/api/routes-client";
 
-const ACTIVITIES: { id: Activity; icon: React.ReactNode }[] = [
-  {
-    id: "run",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <circle cx="13" cy="4" r="1" />
-        <path d="m9 20 3-6 3 2 2 4" />
-        <path d="M6 12 8 8l4-1 3 3 3 1" />
-      </svg>
-    ),
-  },
-  {
-    id: "ride",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <circle cx="5.5" cy="17.5" r="3.5" />
-        <circle cx="18.5" cy="17.5" r="3.5" />
-        <circle cx="15" cy="5" r="1" />
-        <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
-      </svg>
-    ),
-  },
-];
+const ACTIVITIES: Activity[] = ["run", "ride"];
 
 /**
  * The Run tab's idle state: a full-bleed map with a search pill at the top and,
@@ -196,20 +175,20 @@ export function PlannerHero({
             className="-mt-3 flex rounded-full border border-hairline bg-surface p-1"
           >
             {ACTIVITIES.map((option) => {
-              const selected = activity === option.id;
+              const selected = activity === option;
               return (
                 <button
-                  key={option.id}
+                  key={option}
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  onClick={() => onActivityChange(option.id)}
+                  onClick={() => onActivityChange(option)}
                   className={`flex h-9 items-center gap-2 rounded-full px-5 text-xs font-bold uppercase tracking-wider transition-colors ${
                     selected ? "bg-accent text-canvas" : "text-muted hover:text-ink"
                   }`}
                 >
-                  {option.icon}
-                  {activityCopy(option.id).toggleLabel}
+                  <ActivityIcon activity={option} />
+                  {activityCopy(option).toggleLabel}
                 </button>
               );
             })}

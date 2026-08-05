@@ -169,3 +169,97 @@ describe("SavedRoutesSection · deleting", () => {
     expect(screen.getByText("Harbourfront loop")).toBeTruthy();
   });
 });
+
+/**
+ * Founder request, 2026-08-05: routes split by activity type.
+ *
+ * The list is one library holding two kinds of route. A rider scrolling past
+ * forty running routes to reach their three rides is the failure this block
+ * guards, along with its opposite — a runner who has never ridden being shown a
+ * filter with nothing on the other side of it.
+ */
+describe("SavedRoutesSection · activity", () => {
+  it("names the activity on every row", async () => {
+    listSavedRoutes.mockResolvedValue([
+      route({ id: "a", name: "Lakeshore spin", activity: "ride", distance_km: 32 }),
+    ]);
+    render(<SavedRoutesSection />);
+
+    const item = await screen.findByRole("listitem");
+    // In the stats line, not only as an icon — an unlabelled glyph tells a
+    // screen-reader user nothing about which routes are which.
+    expect(within(item).getByText(/Ride/)).toBeTruthy();
+  });
+
+  it("reads a legacy route with no activity as a run", async () => {
+    const legacy = route({ id: "old", name: "Old favourite" });
+    delete (legacy as Partial<SavedRoute>).activity;
+    listSavedRoutes.mockResolvedValue([legacy]);
+    render(<SavedRoutesSection />);
+
+    const item = await screen.findByRole("listitem");
+    expect(within(item).getByText(/Run/)).toBeTruthy();
+  });
+
+  it("hides the filter until both activities are saved", async () => {
+    listSavedRoutes.mockResolvedValue([
+      route({ id: "a", activity: "run" }),
+      route({ id: "b", activity: "run" }),
+    ]);
+    render(<SavedRoutesSection />);
+
+    await screen.findAllByRole("listitem");
+    // Three buttons where two do nothing, implying routes are being hidden.
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+  });
+
+  it("offers the filter once a ride is saved alongside a run", async () => {
+    listSavedRoutes.mockResolvedValue([
+      route({ id: "a", name: "Morning 5k", activity: "run" }),
+      route({ id: "b", name: "Lakeshore spin", activity: "ride" }),
+    ]);
+    render(<SavedRoutesSection />);
+
+    expect(await screen.findByRole("radiogroup")).toBeTruthy();
+    // Opens on All, so nothing is hidden until the runner asks for it.
+    expect(screen.getByRole("radio", { name: "All" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("narrows the list to the chosen activity", async () => {
+    listSavedRoutes.mockResolvedValue([
+      route({ id: "a", name: "Morning 5k", activity: "run" }),
+      route({ id: "b", name: "Lakeshore spin", activity: "ride" }),
+      route({ id: "c", name: "Evening loop", activity: "run" }),
+    ]);
+    render(<SavedRoutesSection />);
+
+    fireEvent.click(await screen.findByRole("radio", { name: "Ride" }));
+
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(within(items[0]).getByText("Lakeshore spin")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Run" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("says which filter is hiding things rather than looking empty", async () => {
+    // Reachable by deleting the last ride while the Ride filter is on. Without
+    // this the runner sees a blank panel and assumes the routes were lost.
+    listSavedRoutes.mockResolvedValue([
+      route({ id: "a", name: "Morning 5k", activity: "run" }),
+      route({ id: "b", name: "Lakeshore spin", activity: "ride" }),
+    ]);
+    render(<SavedRoutesSection />);
+
+    fireEvent.click(await screen.findByRole("radio", { name: "Ride" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Lakeshore spin" }));
+
+    expect(await screen.findByText(/No rides saved yet/)).toBeTruthy();
+    // The library is not empty, so the "nothing saved" call to action is wrong.
+    expect(screen.queryByText("Nothing saved")).toBeNull();
+  });
+});

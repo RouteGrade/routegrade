@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ActivityIcon } from "@/components/activity/activity-icon";
 import { summarizeRuns } from "@/lib/activity";
+import { activityCopy } from "@/lib/activity-type";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { listSavedRoutes, type SavedRoute } from "@/lib/api/routes-client";
 import { listRuns, type RecordedRun } from "@/lib/api/runs-client";
@@ -12,7 +14,8 @@ import {
   distanceRecords,
   GRADE_ORDER,
   personalBests,
-  summarizeRouteGrades,
+  routeGradesByActivity,
+  type ActivityGradeProfile,
   type PersonalBest,
 } from "@/lib/profile";
 
@@ -242,57 +245,81 @@ function GradeProfileSection({ routes }: { routes: Load<SavedRoute[]> }) {
     );
   }
 
-  const profile = summarizeRouteGrades(routes.data);
-  // A null commonest grade with routes present means none of them carried a
-  // grade this build recognises — say nothing rather than an empty badge.
-  if (profile.routes === 0 || profile.commonestGrade === null) return null;
+  // Split by activity: a route's grade answers "how good is this for the thing
+  // you do on it", so one averaged letter over runs and rides answers neither.
+  const profiles = routeGradesByActivity(routes.data).filter(
+    // A null commonest grade with routes present means none of them carried a
+    // grade this build recognises — say nothing rather than an empty badge.
+    (profile) => profile.routes > 0 && profile.commonestGrade !== null,
+  );
+  if (profiles.length === 0) return null;
 
-  const mostCounted = Math.max(...GRADE_ORDER.map((g) => profile.counts[g]));
+  // Only worth naming the activity once there is a second one to tell it from.
+  const named = profiles.length > 1;
 
   return (
     <section aria-label="Route grades" className="mt-8">
       <h2 className="rg-label mb-3">Route grades</h2>
-      <div className="rounded-card border border-hairline bg-surface p-5">
-        <div className="flex items-center gap-4">
-          <span className="rg-display flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-2xl text-canvas">
-            {profile.commonestGrade}
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-ink">
-              Most of your routes grade {profile.commonestGrade}
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              {profile.routes} saved · {profile.averageScore?.toFixed(0)} avg score
-            </p>
-          </div>
-        </div>
-
-        {/* Counts per grade: a magnitude comparison, so one hue and a shared
-            scale. The letter carries the identity — colouring the four bars
-            differently would encode it twice, and A and B sit too close on the
-            grade ramp to be told apart at this size anyway. */}
-        <dl className="mt-5 flex flex-col gap-2 border-t border-hairline pt-4">
-          {GRADE_ORDER.map((grade) => (
-            <div key={grade} className="flex items-center gap-3">
-              <dt className="rg-metric w-4 shrink-0 text-sm text-muted">
-                {grade}
-              </dt>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-raised">
-                <div
-                  aria-hidden="true"
-                  className="h-full rounded-full bg-accent"
-                  style={{
-                    width: `${mostCounted > 0 ? (profile.counts[grade] / mostCounted) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-              <dd className="rg-metric w-6 shrink-0 text-right text-sm text-ink">
-                {profile.counts[grade]}
-              </dd>
-            </div>
-          ))}
-        </dl>
+      <div className="flex flex-col gap-2">
+        {profiles.map((profile) => (
+          <GradeCard key={profile.activity} profile={profile} named={named} />
+        ))}
       </div>
     </section>
+  );
+}
+
+function GradeCard({
+  profile,
+  named,
+}: {
+  profile: ActivityGradeProfile;
+  named: boolean;
+}) {
+  const mostCounted = Math.max(...GRADE_ORDER.map((g) => profile.counts[g]));
+  const noun = activityCopy(profile.activity).noun;
+
+  return (
+    <div className="rounded-card border border-hairline bg-surface p-5">
+      <div className="flex items-center gap-4">
+        <span className="rg-display flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-2xl text-canvas">
+          {profile.commonestGrade}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">
+            Most of your {named ? `${noun} routes` : "routes"} grade{" "}
+            {profile.commonestGrade}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+            {named && <ActivityIcon activity={profile.activity} className="h-3 w-3" />}
+            {profile.routes} saved · {profile.averageScore?.toFixed(0)} avg score
+          </p>
+        </div>
+      </div>
+
+      {/* Counts per grade: a magnitude comparison, so one hue and a shared
+          scale. The letter carries the identity — colouring the four bars
+          differently would encode it twice, and A and B sit too close on the
+          grade ramp to be told apart at this size anyway. */}
+      <dl className="mt-5 flex flex-col gap-2 border-t border-hairline pt-4">
+        {GRADE_ORDER.map((grade) => (
+          <div key={grade} className="flex items-center gap-3">
+            <dt className="rg-metric w-4 shrink-0 text-sm text-muted">{grade}</dt>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-raised">
+              <div
+                aria-hidden="true"
+                className="h-full rounded-full bg-accent"
+                style={{
+                  width: `${mostCounted > 0 ? (profile.counts[grade] / mostCounted) * 100 : 0}%`,
+                }}
+              />
+            </div>
+            <dd className="rg-metric w-6 shrink-0 text-right text-sm text-ink">
+              {profile.counts[grade]}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

@@ -1,3 +1,5 @@
+import { activityOf } from "@/lib/activity-type";
+import type { Activity } from "@/lib/api/routes-client";
 import type { RecordedRun, RunSplit } from "@/lib/api/runs-client";
 import type { Grade } from "@/lib/scorecard";
 
@@ -168,6 +170,8 @@ function fastestWindow(splits: RunSplit[], size: number): number | null {
 export type GradedRoute = {
   grade: Grade;
   score: number;
+  /** Legacy routes have none; `activityOf` reads those as a run. */
+  activity?: Activity | null;
 };
 
 export type GradeProfile = {
@@ -216,4 +220,37 @@ export function summarizeRouteGrades(routes: GradedRoute[]): GradeProfile {
     averageScore: routes.length > 0 ? scoreTotal / routes.length : null,
     commonestGrade,
   };
+}
+
+/** One activity's grade profile, tagged so the UI can name it. */
+export type ActivityGradeProfile = GradeProfile & { activity: Activity };
+
+/**
+ * Grade profiles split by what each route was planned for, best-populated
+ * activity first.
+ *
+ * Splitting matters more here than it looks. The grade measures how good a
+ * route is *for the thing you do on it* — a wide arterial with few crossings is
+ * a fine ride and a miserable run, and the scoring service weighs it that way.
+ * Averaging both into "most of your routes grade B" therefore mixes two
+ * different judgements into one letter that answers neither question.
+ *
+ * Activities with nothing saved are omitted rather than shown empty, so a
+ * runner who has never saved a ride sees exactly what they saw before.
+ */
+export function routeGradesByActivity(
+  routes: GradedRoute[],
+): ActivityGradeProfile[] {
+  const buckets: Record<Activity, GradedRoute[]> = { run: [], ride: [] };
+  for (const route of routes) buckets[activityOf(route)].push(route);
+
+  return (["run", "ride"] as const)
+    .filter((activity) => buckets[activity].length > 0)
+    .map((activity) => ({
+      activity,
+      ...summarizeRouteGrades(buckets[activity]),
+    }))
+    // Most-saved first: whichever the runner mostly does should lead, rather
+    // than "run" always winning a board that a rider fills.
+    .sort((a, b) => b.routes - a.routes);
 }
