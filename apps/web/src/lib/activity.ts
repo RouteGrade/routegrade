@@ -11,31 +11,54 @@ import type { RecordedRun, RunSplit } from "@/lib/api/runs-client";
  */
 
 export type ActivityTotals = {
+  /** Recorded runs. Rides are counted separately — see `rides`. */
   runs: number;
+  rides: number;
+  /** Distance and time across everything: both are honest sums of both. */
   distanceKm: number;
   durationS: number;
-  /** Distance-weighted, not a mean of means; null when nothing has been run. */
+  /**
+   * Distance-weighted pace across RUNS ONLY; null when nothing was run.
+   *
+   * Rides are excluded deliberately rather than incidentally. A ride covers
+   * three to four times the ground per minute, so folding one into this figure
+   * does not nudge it — it swamps it, and reports a pace the runner never ran.
+   */
   avgPaceSPerKm: number | null;
+  /** Distance-weighted speed across RIDES ONLY; null when nothing was ridden. */
+  avgSpeedKmh: number | null;
 };
 
-export function summarizeRuns(runs: RecordedRun[]): ActivityTotals {
-  let distanceKm = 0;
-  let durationS = 0;
-
-  for (const run of runs) {
-    // A recorded distance can be 0 (a run abandoned at the start line); that is
-    // valid history, it just contributes nothing to pace.
-    distanceKm += Number(run.distance_km) || 0;
-    durationS += Number(run.duration_s) || 0;
+/** Total distance and time over a subset, plus the rate that spans them. */
+function rateOver(entries: RecordedRun[]): { km: number; s: number } {
+  let km = 0;
+  let s = 0;
+  for (const entry of entries) {
+    // A recorded distance can be 0 (abandoned at the start line); that is valid
+    // history, it just contributes nothing to the rate.
+    km += Number(entry.distance_km) || 0;
+    s += Number(entry.duration_s) || 0;
   }
+  return { km, s };
+}
+
+export function summarizeRuns(runs: RecordedRun[]): ActivityTotals {
+  const onlyRuns = runs.filter((r) => r.activity !== "ride");
+  const onlyRides = runs.filter((r) => r.activity === "ride");
+
+  const all = rateOver(runs);
+  const ran = rateOver(onlyRuns);
+  const rode = rateOver(onlyRides);
 
   return {
-    runs: runs.length,
-    distanceKm,
-    durationS,
+    runs: onlyRuns.length,
+    rides: onlyRides.length,
+    distanceKm: all.km,
+    durationS: all.s,
     // Total time over total distance — a plain average of each run's pace would
     // let a 1 km jog outweigh a 20 km long run.
-    avgPaceSPerKm: distanceKm > 0 ? Math.round(durationS / distanceKm) : null,
+    avgPaceSPerKm: ran.km > 0 ? Math.round(ran.s / ran.km) : null,
+    avgSpeedKmh: rode.s > 0 ? (rode.km / rode.s) * 3600 : null,
   };
 }
 

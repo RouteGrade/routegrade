@@ -23,21 +23,41 @@ export type PersonalBest = {
 export type PersonalBests = {
   longestDistanceKm: PersonalBest | null;
   longestDurationS: PersonalBest | null;
+  /** Longest ride, kept apart so it can never be read as a running record. */
+  longestRideKm: PersonalBest | null;
 };
 
 /**
  * "How far" and "how long" records. Speed records live in `distanceRecords`,
  * which measures it over a fixed distance rather than over a whole run.
  *
+ * RUNS AND RIDES ARE KEPT APART. A rider covers 40 km on an easy afternoon, so
+ * a combined "longest" makes every running record unreachable the first time
+ * someone rides, and reports a distance they never ran. The ride equivalent is
+ * reported as its own record instead of being dropped.
+ *
  * Ties keep the earlier run in the list.
  */
-export function personalBests(runs: RecordedRun[]): PersonalBests {
+export function personalBests(entries: RecordedRun[]): PersonalBests {
   const bests: PersonalBests = {
     longestDistanceKm: null,
     longestDurationS: null,
+    longestRideKm: null,
   };
 
-  for (const run of runs) {
+  for (const entry of entries) {
+    if (entry.activity === "ride") {
+      const rideKm = Number(entry.distance_km) || 0;
+      if (rideKm > (bests.longestRideKm?.value ?? 0)) {
+        bests.longestRideKm = {
+          runId: entry.id,
+          startedAt: entry.started_at,
+          value: rideKm,
+        };
+      }
+      continue;
+    }
+    const run = entry;
     const distanceKm = Number(run.distance_km) || 0;
     const durationS = Number(run.duration_s) || 0;
     const at = { runId: run.id, startedAt: run.started_at };
@@ -85,11 +105,16 @@ export type DistanceRecord = {
  * need the raw GPS trace re-walked, which is a much heavier job for a figure
  * that would move by seconds.
  *
+ * RIDES ARE EXCLUDED. "Fastest 5 km" is a running record; a bike covers the
+ * same five kilometres in a third of the time, so one ride would take every
+ * bracket permanently and the board would stop describing the runner at all.
+ *
  * Brackets nobody has run far enough to set are omitted rather than shown
  * empty. Ties keep the earlier run in the list.
  */
-export function distanceRecords(runs: RecordedRun[]): DistanceRecord[] {
+export function distanceRecords(entries: RecordedRun[]): DistanceRecord[] {
   const records: DistanceRecord[] = [];
+  const runs = entries.filter((entry) => entry.activity !== "ride");
 
   for (const bracket of DISTANCE_BRACKETS) {
     let best: DistanceRecord | null = null;

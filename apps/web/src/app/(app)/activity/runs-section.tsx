@@ -12,7 +12,8 @@ import {
 } from "@/lib/activity";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { deleteRun, listRuns, type RecordedRun } from "@/lib/api/runs-client";
-import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
+import { formatDuration, formatTotalTime } from "@/lib/geo";
+import { effortMetric, formatSpeed } from "@/lib/effort-metric";
 
 type LoadState =
   | { kind: "loading" }
@@ -136,17 +137,27 @@ export function RunsSection() {
 
         <dl className="mt-6 grid grid-cols-3 gap-3 border-t border-hairline pt-5">
           {[
-            { label: "Runs", value: String(totals.runs) },
+            // Rides are counted apart rather than lumped in: "4 runs" that
+            // silently includes a ride describes neither.
+            {
+              label: totals.rides > 0 ? "Runs · rides" : "Runs",
+              value:
+                totals.rides > 0
+                  ? `${totals.runs} · ${totals.rides}`
+                  : String(totals.runs),
+            },
             // Hours-and-minutes rather than a stopwatch reading, matching the
             // You tab's Time tile.
             { label: "Time", value: formatTotalTime(totals.durationS) },
-            {
-              label: "Avg pace",
-              value:
-                totals.avgPaceSPerKm !== null
-                  ? formatPace(totals.avgPaceSPerKm)
-                  : "—:—",
-            },
+            // Whichever rate this period actually has. When it has both, the
+            // ride speed wins the tile only if nothing was run — a mixed period
+            // shows pace, since that is the figure a runner came here for.
+            totals.avgPaceSPerKm === null && totals.avgSpeedKmh !== null
+              ? { label: "Avg speed", value: formatSpeed(totals.avgSpeedKmh) }
+              : {
+                  label: "Avg pace",
+                  value: effortMetric("run", totals.avgPaceSPerKm).value,
+                },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col-reverse">
               <dt className="rg-label mt-1.5">{stat.label}</dt>
@@ -170,7 +181,7 @@ export function RunsSection() {
                 {DATE_FORMAT.format(new Date(run.started_at))}
               </p>
               <p className="mt-1 truncate pr-10 text-sm font-semibold text-ink">
-                {run.route_name ?? "Run"}
+                {run.route_name ?? (run.activity === "ride" ? "Ride" : "Run")}
               </p>
 
               <div className="mt-4 flex items-end gap-6">
@@ -187,14 +198,24 @@ export function RunsSection() {
                     </p>
                     <p className="rg-label mt-1">Time</p>
                   </div>
-                  {run.avg_pace_s_per_km !== null && (
-                    <div>
-                      <p className="rg-metric text-lg text-ink">
-                        {formatPace(run.avg_pace_s_per_km)}
-                      </p>
-                      <p className="rg-label mt-1">Pace /km</p>
-                    </div>
-                  )}
+                  {run.avg_pace_s_per_km !== null &&
+                    (() => {
+                      const metric = effortMetric(
+                        run.activity,
+                        run.avg_pace_s_per_km,
+                        { average: false },
+                      );
+                      return (
+                        <div>
+                          <p className="rg-metric text-lg text-ink">
+                            {metric.value}
+                          </p>
+                          <p className="rg-label mt-1">
+                            {metric.label} {metric.unit}
+                          </p>
+                        </div>
+                      );
+                    })()}
                 </div>
               </div>
             </Link>

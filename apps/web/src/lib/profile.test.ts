@@ -33,6 +33,7 @@ describe("personalBests", () => {
     expect(personalBests([])).toEqual({
       longestDistanceKm: null,
       longestDurationS: null,
+      longestRideKm: null,
     });
   });
 
@@ -201,5 +202,58 @@ describe("summarizeRouteGrades", () => {
       { grade: "A", score: 95 },
     ]);
     expect(profile.commonestGrade).toBe("A");
+  });
+});
+
+describe("records with rides mixed in", () => {
+  /**
+   * Founder request, 2026-08-05. The failure this guards: one afternoon ride
+   * takes every running record permanently, and the board stops describing the
+   * runner at all.
+   */
+
+  it("does not let a ride set the longest-distance running record", () => {
+    const bests = personalBests([
+      run({ id: "ran", distance_km: 12, duration_s: 3600 }),
+      run({ id: "rode", activity: "ride", distance_km: 80, duration_s: 10800 }),
+    ]);
+
+    expect(bests.longestDistanceKm?.runId).toBe("ran");
+    expect(bests.longestDistanceKm?.value).toBe(12);
+  });
+
+  it("reports the longest ride as its own record rather than dropping it", () => {
+    const bests = personalBests([
+      run({ id: "rode", activity: "ride", distance_km: 80, duration_s: 10800 }),
+    ]);
+
+    expect(bests.longestRideKm?.value).toBe(80);
+    // ...and it is not silently doubling as a running record.
+    expect(bests.longestDistanceKm).toBeNull();
+  });
+
+  it("does not let a ride take a distance-bracket record", () => {
+    const splits = (n: number, each: number) =>
+      Array.from({ length: n }, (_, i) => ({ km: i + 1, duration_s: each }));
+
+    const records = distanceRecords([
+      run({ id: "ran", splits: splits(5, 300) }), // 5:00/km
+      run({ id: "rode", activity: "ride", splits: splits(5, 90) }), // 1:30/km
+    ]);
+
+    const fiveK = records.find((r) => r.km === 5);
+    expect(fiveK?.runId).toBe("ran");
+    expect(fiveK?.durationS).toBe(1500);
+  });
+
+  it("leaves the board empty rather than filling it from rides", () => {
+    const records = distanceRecords([
+      run({
+        id: "rode",
+        activity: "ride",
+        splits: Array.from({ length: 10 }, (_, i) => ({ km: i + 1, duration_s: 90 })),
+      }),
+    ]);
+    expect(records).toEqual([]);
   });
 });
