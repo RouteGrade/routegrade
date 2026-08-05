@@ -34,6 +34,7 @@ function route(partial: Partial<SavedRoute>): SavedRoute {
     starting_address: null,
     distance_km: 5,
     preference: "quiet",
+    activity: "run",
     geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
     elevation_gain_m: 12,
     intersections_per_km: 3,

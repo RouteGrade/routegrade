@@ -242,6 +242,7 @@ class SavedRouteSave(BaseModel):
     starting_address: str | None = Field(default=None, max_length=300)
     distance_km: float = Field(gt=0, le=999.99)
     preference: Preference
+    activity: Activity = "run"
     geometry: LineStringGeometry
     elevation_gain_m: float = Field(ge=0)
     # Optional so older clients / free routes without the metric still save;
@@ -267,6 +268,7 @@ class SavedRouteRead(BaseModel):
     starting_address: str | None
     distance_km: float
     preference: Preference
+    activity: Activity
     geometry: LineStringGeometry
     elevation_gain_m: float
     intersections_per_km: float | None

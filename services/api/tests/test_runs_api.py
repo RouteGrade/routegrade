@@ -194,3 +194,59 @@ class TestValidation:
             headers=auth_headers(str(uuid.uuid4())),
         )
         assert res.status_code == 422
+
+
+class TestActivity:
+    """Founder request 2026-08-05: history must tell a ride from a run.
+
+    Without this, every downstream reading of run history — headline metric,
+    personal bests, weekly totals — is silently wrong for one of the two.
+    """
+
+    def test_a_run_is_the_default_for_a_client_that_omits_activity(
+        self, client, auth_headers
+    ):
+        user = str(uuid.uuid4())
+        payload = _run_payload()
+        payload.pop("activity", None)
+        res = client.put(
+            f"/v1/users/me/runs/{uuid.uuid4()}", json=payload, headers=auth_headers(user)
+        )
+        assert res.status_code == 201
+        assert res.json()["run"]["activity"] == "run"
+
+    def test_a_ride_round_trips(self, client, auth_headers):
+        user = str(uuid.uuid4())
+        run_id = uuid.uuid4()
+        client.put(
+            f"/v1/users/me/runs/{run_id}",
+            json=_run_payload(activity="ride"),
+            headers=auth_headers(user),
+        )
+        read = client.get(f"/v1/users/me/runs/{run_id}", headers=auth_headers(user))
+        assert read.json()["activity"] == "ride"
+
+    def test_activity_is_updated_on_re_save(self, client, auth_headers):
+        """The upsert path overwrites fields; activity must not be sticky."""
+
+        user = str(uuid.uuid4())
+        run_id = uuid.uuid4()
+        headers = auth_headers(user)
+        client.put(
+            f"/v1/users/me/runs/{run_id}", json=_run_payload(activity="ride"), headers=headers
+        )
+        client.put(
+            f"/v1/users/me/runs/{run_id}", json=_run_payload(activity="run"), headers=headers
+        )
+        assert (
+            client.get(f"/v1/users/me/runs/{run_id}", headers=headers).json()["activity"]
+            == "run"
+        )
+
+    def test_an_unknown_activity_is_rejected(self, client, auth_headers):
+        res = client.put(
+            f"/v1/users/me/runs/{uuid.uuid4()}",
+            json=_run_payload(activity="swim"),
+            headers=auth_headers(str(uuid.uuid4())),
+        )
+        assert res.status_code == 422

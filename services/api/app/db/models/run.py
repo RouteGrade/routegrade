@@ -36,6 +36,11 @@ class Run(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False, index=True)
     route_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)
     route_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # "run" | "ride". Server default backfills pre-2026-08-05 rows, which really
+    # were all runs — see migration 0008.
+    activity: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="run", default="run"
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_s: Mapped[int] = mapped_column(Integer, nullable=False)
     distance_km: Mapped[Decimal] = mapped_column(Numeric(6, 3), nullable=False)

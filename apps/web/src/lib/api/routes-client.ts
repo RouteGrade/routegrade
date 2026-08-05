@@ -60,6 +60,8 @@ export type SavedRoute = {
   starting_address: string | null;
   distance_km: number;
   preference: Preference;
+  /** What the route was planned for. Legacy routes read back as "run". */
+  activity: Activity;
   geometry: LineStringGeometry;
   elevation_gain_m: number;
   // null for legacy routes saved before intersection density was persisted.

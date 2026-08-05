@@ -233,3 +233,44 @@ class TestValidation:
             ).status_code
             == 422
         )
+
+
+class TestActivity:
+    """A saved route remembers whether it was planned as a run or a ride."""
+
+    def test_defaults_to_a_run(self, client, auth_headers):
+        user = str(uuid.uuid4())
+        payload = _route_payload()
+        payload.pop("activity", None)
+        res = client.put(
+            f"/v1/users/me/routes/{uuid.uuid4()}",
+            json=payload,
+            headers=auth_headers(user),
+        )
+        assert res.status_code == 201
+        assert res.json()["route"]["activity"] == "run"
+
+    def test_a_ride_round_trips_and_appears_in_the_list(self, client, auth_headers):
+        user = str(uuid.uuid4())
+        route_id = uuid.uuid4()
+        headers = auth_headers(user)
+        client.put(
+            f"/v1/users/me/routes/{route_id}",
+            json=_route_payload(activity="ride", distance_km=42.0),
+            headers=headers,
+        )
+
+        assert (
+            client.get(f"/v1/users/me/routes/{route_id}", headers=headers).json()["activity"]
+            == "ride"
+        )
+        listed = client.get("/v1/users/me/routes", headers=headers).json()["routes"]
+        assert [r["activity"] for r in listed] == ["ride"]
+
+    def test_an_unknown_activity_is_rejected(self, client, auth_headers):
+        res = client.put(
+            f"/v1/users/me/routes/{uuid.uuid4()}",
+            json=_route_payload(activity="swim"),
+            headers=auth_headers(str(uuid.uuid4())),
+        )
+        assert res.status_code == 422

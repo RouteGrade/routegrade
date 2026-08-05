@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { saveRunRating } from "@/lib/api/run-ratings-client";
-import type { LineStringGeometry, Preference } from "@/lib/api/routes-client";
+import type { Activity, LineStringGeometry, Preference } from "@/lib/api/routes-client";
 import { saveRun, type RunSplit } from "@/lib/api/runs-client";
 import {
   formatDuration,
@@ -43,6 +43,8 @@ export type RunnableRoute = {
   intersections_per_km?: number | null;
   sidewalk_coverage?: number | null;
   preference?: Preference;
+  /** Run or ride. Persisted with the recorded activity; defaults to a run. */
+  activity?: Activity;
 };
 
 export type RunTelemetry = {
@@ -395,6 +397,7 @@ export default function RunTracker({
       await saveRun(runIdRef.current, {
         route_id: routeId,
         route_name: route.name,
+        activity: route.activity ?? "run",
         started_at: startedAtRef.current ?? new Date().toISOString(),
         duration_s: durationS,
         distance_km: Number(km.toFixed(3)),

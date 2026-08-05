@@ -219,6 +219,7 @@ export default function RouteExplorer({
         if (saved.starting_address) setAddress(saved.starting_address);
         setDistanceKm(snapDistanceKm(saved.distance_km));
         setPreference(saved.preference);
+        setActivity(saved.activity ?? "run");
         setSavedIds((prev) => new Set(prev).add(saved.id));
       } catch {
         // Deleted or someone else's link — quietly fall back to a fresh planner.
@@ -527,6 +528,7 @@ export default function RouteExplorer({
         starting_address: active.startingAddress,
         distance_km: active.route.distance_km,
         preference,
+        activity,
         geometry: active.route.geometry,
         elevation_gain_m: active.route.elevation_gain_m,
         intersections_per_km: active.route.intersections_per_km,
@@ -943,6 +945,7 @@ export default function RouteExplorer({
             intersections_per_km: active.route.intersections_per_km,
             sidewalk_coverage: active.route.sidewalk_coverage,
             preference,
+            activity,
           }}
           isAuthenticated={isAuthenticated}
           onExit={() => {
