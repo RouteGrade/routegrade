@@ -7,7 +7,8 @@ import type { LineString } from "geojson";
 import { SplitsChart } from "@/components/activity/splits-chart";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { getRun, type RecordedRun } from "@/lib/api/runs-client";
-import { formatDuration, formatPace } from "@/lib/geo";
+import { formatDuration } from "@/lib/geo";
+import { effortMetric } from "@/lib/effort-metric";
 
 const RouteMap = dynamic(() => import("@/components/route-map"), {
   ssr: false,
@@ -85,13 +86,10 @@ export function RunDetailView({ runId }: { runId: string }) {
   }
 
   const { run } = state;
+  const rate = effortMetric(run.activity, run.avg_pace_s_per_km);
   const stats = [
     { label: "Time", value: formatDuration(run.duration_s) },
-    {
-      label: "Avg pace",
-      value: run.avg_pace_s_per_km !== null ? formatPace(run.avg_pace_s_per_km) : "—:—",
-      unit: "/km",
-    },
+    { label: rate.label, value: rate.value, unit: rate.unit },
     { label: "Splits", value: String(run.splits.length) },
   ];
 
