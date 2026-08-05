@@ -31,7 +31,14 @@ test.describe("add to home screen", () => {
 
     const step = page.getByRole("dialog", { name: /home screen/i });
     await expect(step).toBeVisible();
-    await expect(step.getByText("Add to Home Screen")).toBeVisible();
+
+    // iOS has no install API, so the payload is the replica share sheet with
+    // the target row picked out — not a wall of numbered instructions.
+    // `exact` throughout: Playwright's text matching is substring-based, and
+    // the screen-reader step list repeats all of these inside longer sentences.
+    await expect(step.getByText("Add to Home Screen", { exact: true })).toBeVisible();
+    await expect(step.getByText("Add to Reading List", { exact: true })).toBeVisible();
+    await expect(step.getByText("Share", { exact: true })).toBeVisible();
 
     await step.getByRole("button", { name: /continue in the browser/i }).click();
     await expect(step).toBeHidden();
