@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { distanceRecords, personalBests, summarizeRouteGrades } from "./profile";
+import {
+  distanceRecords,
+  personalBests,
+  routeGradesByActivity,
+  summarizeRouteGrades,
+} from "./profile";
 import type { RecordedRun } from "@/lib/api/runs-client";
 
 function run(partial: Partial<RecordedRun>): RecordedRun {
@@ -255,5 +260,74 @@ describe("records with rides mixed in", () => {
       }),
     ]);
     expect(records).toEqual([]);
+  });
+});
+
+/**
+ * Founder request, 2026-08-05: routes split by activity type.
+ *
+ * A route's grade measures how good it is for the thing you do on it — the
+ * scoring service weighs crossings and gradient differently for a ride. So a
+ * single "most of your routes grade B" over both is not a rounding problem, it
+ * is an average of two different questions.
+ */
+describe("routeGradesByActivity", () => {
+  it("has nothing to report with no saved routes", () => {
+    expect(routeGradesByActivity([])).toEqual([]);
+  });
+
+  it("keeps run and ride grades in separate profiles", () => {
+    const profiles = routeGradesByActivity([
+      { grade: "A", score: 92, activity: "run" },
+      { grade: "A", score: 88, activity: "run" },
+      { grade: "D", score: 40, activity: "ride" },
+    ]);
+
+    expect(profiles).toHaveLength(2);
+
+    const run = profiles.find((p) => p.activity === "run")!;
+    expect(run.routes).toBe(2);
+    expect(run.counts).toEqual({ A: 2, B: 0, C: 0, D: 0 });
+    expect(run.averageScore).toBeCloseTo(90);
+
+    const ride = profiles.find((p) => p.activity === "ride")!;
+    expect(ride.routes).toBe(1);
+    expect(ride.commonestGrade).toBe("D");
+    // The point of the split: the D never drags the running average down.
+    expect(ride.averageScore).toBeCloseTo(40);
+  });
+
+  it("omits an activity with nothing saved", () => {
+    const profiles = routeGradesByActivity([{ grade: "B", score: 75, activity: "run" }]);
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].activity).toBe("run");
+  });
+
+  it("leads with the activity the runner mostly saves", () => {
+    // A rider's board shouldn't open on their one stray running route.
+    const profiles = routeGradesByActivity([
+      { grade: "C", score: 60, activity: "run" },
+      { grade: "A", score: 95, activity: "ride" },
+      { grade: "A", score: 91, activity: "ride" },
+    ]);
+    expect(profiles.map((p) => p.activity)).toEqual(["ride", "run"]);
+  });
+
+  it("files legacy routes with no activity under run", () => {
+    const profiles = routeGradesByActivity([{ grade: "B", score: 75 }]);
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0].activity).toBe("run");
+    expect(profiles[0].routes).toBe(1);
+  });
+
+  it("agrees with summarizeRouteGrades when only one activity is saved", () => {
+    // The single-activity path must not drift from the unsplit summary — that
+    // is what a runner who has never ridden still sees.
+    const routes = [
+      { grade: "A" as const, score: 90, activity: "run" as const },
+      { grade: "B" as const, score: 70, activity: "run" as const },
+    ];
+    const [profile] = routeGradesByActivity(routes);
+    expect(profile).toEqual({ activity: "run", ...summarizeRouteGrades(routes) });
   });
 });
