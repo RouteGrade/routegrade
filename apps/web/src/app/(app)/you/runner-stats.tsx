@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/authenticated-client";
 import { listSavedRoutes, type SavedRoute } from "@/lib/api/routes-client";
 import { listRuns, type RecordedRun } from "@/lib/api/runs-client";
 import { formatDuration, formatPace, formatTotalTime } from "@/lib/geo";
+import { formatSpeed } from "@/lib/effort-metric";
 import {
   distanceRecords,
   GRADE_ORDER,
@@ -89,14 +90,27 @@ function Lifetime({ runs }: { runs: Load<RecordedRun[]> }) {
 
   const stats = [
     { label: "Distance", value: totals.distanceKm.toFixed(1), unit: "km" },
-    { label: "Runs", value: String(totals.runs) },
+    // Rides are counted apart: a lifetime "Runs" figure that quietly includes
+    // rides is the kind of number people screenshot, so it has to be true.
+    totals.rides > 0
+      ? { label: "Runs · rides", value: `${totals.runs} · ${totals.rides}` }
+      : { label: "Runs", value: String(totals.runs) },
     { label: "Time", value: formatTotalTime(totals.durationS) },
-    {
-      label: "Avg pace",
-      value:
-        totals.avgPaceSPerKm !== null ? formatPace(totals.avgPaceSPerKm) : "—:—",
-      unit: totals.avgPaceSPerKm !== null ? "/km" : undefined,
-    },
+    // Pace is a running figure. Someone who only rides sees their speed here
+    // rather than an empty tile; someone who does both sees pace, since the
+    // ride speed has its own record below.
+    totals.avgPaceSPerKm === null && totals.avgSpeedKmh !== null
+      ? {
+          label: "Avg speed",
+          value: formatSpeed(totals.avgSpeedKmh),
+          unit: "km/h",
+        }
+      : {
+          label: "Avg pace",
+          value:
+            totals.avgPaceSPerKm !== null ? formatPace(totals.avgPaceSPerKm) : "—:—",
+          unit: totals.avgPaceSPerKm !== null ? "/km" : undefined,
+        },
   ];
 
   return (
@@ -147,6 +161,15 @@ function Records({ runs }: { runs: Load<RecordedRun[]> }) {
       label: "Longest time",
       value: formatTotalTime(bests.longestDurationS.value),
       best: bests.longestDurationS,
+    });
+  }
+  if (bests.longestRideKm) {
+    // Its own row rather than competing with "Longest run" — a 40 km ride would
+    // otherwise take the running record and never give it back.
+    rows.push({
+      label: "Longest ride",
+      value: `${bests.longestRideKm.value.toFixed(2)} km`,
+      best: bests.longestRideKm,
     });
   }
 

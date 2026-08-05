@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LngLat } from "@/lib/geo";
-import { formatDuration, formatPace } from "@/lib/geo";
+import { formatDuration } from "@/lib/geo";
+import { effortMetric } from "@/lib/effort-metric";
+import type { Activity } from "@/lib/api/routes-client";
 import {
   buildShareText,
   deriveReasons,
@@ -35,6 +37,8 @@ export type RunShareData = {
   distanceKm: number;
   durationS: number;
   avgPaceS: number | null;
+  /** Run or ride — decides whether the rate reads as pace or as speed. */
+  activity?: Activity;
   grade?: Grade;
   score?: number;
   intersectionsPerKm?: number | null;
@@ -252,7 +256,10 @@ function drawFrame(
   const chipsAlpha = clamp01((u - 0.3) / 0.2);
   const chips: Array<{ label: string; value: string; accent?: boolean }> = [
     { label: "TIME", value: formatDuration(data.durationS) },
-    { label: "AVG PACE", value: `${formatPace(data.avgPaceS)}` },
+    (() => {
+      const rate = effortMetric(data.activity ?? "run", data.avgPaceS);
+      return { label: rate.label.toUpperCase(), value: rate.value };
+    })(),
   ];
   if (data.grade) {
     chips.push({

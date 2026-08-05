@@ -30,9 +30,11 @@ describe("summarizeRuns", () => {
   it("returns an empty summary with no pace for no runs", () => {
     expect(summarizeRuns([])).toEqual({
       runs: 0,
+      rides: 0,
       distanceKm: 0,
       durationS: 0,
       avgPaceSPerKm: null,
+      avgSpeedKmh: null,
     });
   });
 
@@ -144,9 +146,11 @@ describe("summarizePeriod", () => {
     );
     expect(totals).toEqual({
       runs: 0,
+      rides: 0,
       distanceKm: 0,
       durationS: 0,
       avgPaceSPerKm: null,
+      avgSpeedKmh: null,
     });
   });
 });
@@ -217,5 +221,62 @@ describe("summarizeSplits", () => {
       { km: 2, duration_s: 300 },
     ]);
     expect(flat.rows.some((r) => r.fastest)).toBe(false);
+  });
+});
+
+describe("summarizeRuns with rides mixed in", () => {
+  /**
+   * Founder request, 2026-08-05: biking alongside running. A ride covers three
+   * to four times the ground per minute, so folding one into an average pace
+   * does not nudge the figure — it swamps it.
+   */
+
+  it("keeps a ride out of the average pace entirely", () => {
+    const ranOnly = summarizeRuns([
+      run({ distance_km: 10, duration_s: 3000 }), // 5:00/km
+    ]);
+    const withARide = summarizeRuns([
+      run({ distance_km: 10, duration_s: 3000 }),
+      run({ activity: "ride", distance_km: 40, duration_s: 3600 }), // 40 km/h
+    ]);
+
+    expect(withARide.avgPaceSPerKm).toBe(ranOnly.avgPaceSPerKm);
+    expect(withARide.avgPaceSPerKm).toBe(300);
+  });
+
+  it("reports ride speed separately, distance-weighted", () => {
+    const totals = summarizeRuns([
+      run({ activity: "ride", distance_km: 30, duration_s: 3600 }),
+      run({ activity: "ride", distance_km: 10, duration_s: 1800 }),
+    ]);
+    // 40 km in 5400 s = 26.67 km/h.
+    expect(totals.avgSpeedKmh).toBeCloseTo(26.67, 1);
+  });
+
+  it("counts runs and rides apart but sums distance across both", () => {
+    const totals = summarizeRuns([
+      run({ distance_km: 5, duration_s: 1500 }),
+      run({ activity: "ride", distance_km: 40, duration_s: 3600 }),
+    ]);
+    expect(totals.runs).toBe(1);
+    expect(totals.rides).toBe(1);
+    expect(totals.distanceKm).toBe(45);
+  });
+
+  it("reports no pace at all for a ride-only period", () => {
+    const totals = summarizeRuns([
+      run({ activity: "ride", distance_km: 40, duration_s: 3600 }),
+    ]);
+    expect(totals.avgPaceSPerKm).toBeNull();
+    expect(totals.avgSpeedKmh).toBeCloseTo(40, 5);
+  });
+
+  it("treats a legacy run with no activity as a run", () => {
+    // Rows written before the activity column existed genuinely were runs.
+    const legacy = { ...run({ distance_km: 10, duration_s: 3000 }) };
+    delete (legacy as { activity?: unknown }).activity;
+    const totals = summarizeRuns([legacy as typeof legacy & { activity: "run" }]);
+    expect(totals.runs).toBe(1);
+    expect(totals.avgPaceSPerKm).toBe(300);
   });
 });
