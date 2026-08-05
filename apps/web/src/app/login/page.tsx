@@ -14,11 +14,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { next: rawNext, error } = await searchParams;
 
   // If already signed in, jump straight to the intended destination.
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
+  //
+  // Guarded like every other page that reaches for Supabase (the app shell,
+  // Activity, Routes, You): `createSupabaseServerClient` throws outright when
+  // the keys are absent, and an unguarded call here took the whole sign-in
+  // screen down with it rather than the one feature that needed them. Nobody
+  // can be signed in without Supabase, so the answer in that case is simply
+  // "no user" — render the form.
+  let signedIn = false;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    signedIn = user !== null;
+  } catch {
+    // Supabase not configured — show the form rather than an error screen.
+  }
+  // Outside the try: redirect() signals by throwing, and catching that here
+  // would swallow the redirect and render the login form to a signed-in user.
+  if (signedIn) {
     redirect(safeRedirect(rawNext, "/"));
   }
 
