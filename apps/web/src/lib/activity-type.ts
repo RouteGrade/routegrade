@@ -45,6 +45,61 @@ export function activityCopy(activity: Activity): ActivityCopy {
 }
 
 /**
+ * The activity of a stored record, tolerant of not having one.
+ *
+ * Anything saved before migration 0008 has no `activity` at all, and anything
+ * saved between the API shipping and that migration landing may have been
+ * written by a client that didn't send one. Both genuinely predate riding, so
+ * reading them as a run is a statement of fact rather than a guess — but it has
+ * to be one function, because `?? "run"` scattered across call sites is exactly
+ * how one of them ends up being `?? "ride"`.
+ */
+export function activityOf(record: { activity?: Activity | null }): Activity {
+  return record.activity === "ride" ? "ride" : "run";
+}
+
+/** The saved-routes filter: either activity, or neither restriction. */
+export const ACTIVITY_FILTERS = ["all", "run", "ride"] as const;
+
+export type ActivityFilter = (typeof ACTIVITY_FILTERS)[number];
+
+export const ACTIVITY_FILTER_LABEL: Record<ActivityFilter, string> = {
+  all: "All",
+  run: "Run",
+  ride: "Ride",
+};
+
+/** Records matching the filter. "all" passes everything through untouched. */
+export function filterByActivity<T extends { activity?: Activity | null }>(
+  records: T[],
+  filter: ActivityFilter,
+): T[] {
+  if (filter === "all") return records;
+  return records.filter((record) => activityOf(record) === filter);
+}
+
+/**
+ * Whether the filter is worth showing at all.
+ *
+ * A runner who has never saved a ride should not be asked to choose between run
+ * and ride — the control would be three buttons where two of them do nothing,
+ * and it would imply the app is hiding something from them. It appears the
+ * moment the second activity does.
+ */
+export function hasMixedActivities(
+  records: { activity?: Activity | null }[],
+): boolean {
+  let sawRun = false;
+  let sawRide = false;
+  for (const record of records) {
+    if (activityOf(record) === "ride") sawRide = true;
+    else sawRun = true;
+    if (sawRun && sawRide) return true;
+  }
+  return false;
+}
+
+/**
  * Where the distance slider starts for each activity. 5 km is the long-standing
  * running default; 20 km is a short ride — far enough that the ride ceiling is
  * worth having, close enough that the first tap isn't a two-hour commitment.

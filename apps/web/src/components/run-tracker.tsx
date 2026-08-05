@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/authenticated-client";
 import { saveRunRating } from "@/lib/api/run-ratings-client";
 import type { Activity, LineStringGeometry, Preference } from "@/lib/api/routes-client";
+import { effortMetric, spokenSpeed } from "@/lib/effort-metric";
 import { saveRun, type RunSplit } from "@/lib/api/runs-client";
 import {
   formatDuration,
@@ -92,6 +93,11 @@ export default function RunTracker({
   onExit: () => void;
   onTelemetry: (telemetry: RunTelemetry | null) => void;
 }) {
+  // Declared before the handlers that speak, so the spoken copy is available
+  // wherever a cue fires rather than only during render.
+  const activity = route.activity ?? "run";
+  const Noun = activity === "ride" ? "Ride" : "Run";
+
   const [phase, setPhase] = useState<Phase>("countdown");
   const [countdown, setCountdown] = useState(3);
   const [muted, setMuted] = useState(false);
@@ -232,7 +238,15 @@ export default function RunTracker({
       const split = { km, duration_s: Math.max(1, elapsed - previous) };
       splitsRef.current.push(split);
       setSplits([...splitsRef.current]);
-      speak(`Kilometer ${km}. ${spokenPace(split.duration_s)}.`);
+      // A rider hearing "two minutes twenty-four seconds per kilometer" has to
+      // do arithmetic mid-ride to know how they're going.
+      speak(
+        `Kilometer ${km}. ${
+          activity === "ride"
+            ? spokenSpeed(split.duration_s)
+            : spokenPace(split.duration_s)
+        }.`,
+      );
     }
 
     // Route guidance: progress + off-route hysteresis.
@@ -294,7 +308,9 @@ export default function RunTracker({
         startedAtRef.current = new Date().toISOString();
         resumedAtRef.current = performance.now();
         setPhase("running");
-        speak(`Run started. ${route.distance_km.toFixed(1)} kilometers ahead. Good luck!`);
+        speak(
+          `${Noun} started. ${route.distance_km.toFixed(1)} kilometers ahead. Good luck!`,
+        );
       },
       countdown === 0 ? 800 : 1000,
     );
@@ -352,7 +368,7 @@ export default function RunTracker({
       resumedAtRef.current = null;
     }
     setPhase("paused");
-    speak("Run paused.");
+    speak(`${Noun} paused.`);
   };
 
   const resumeRun = () => {
@@ -372,10 +388,10 @@ export default function RunTracker({
     const km = distanceRef.current / 1000;
     speak(
       km >= 0.05
-        ? `Run complete. ${km.toFixed(2)} kilometers in ${formatDuration(
+        ? `${Noun} complete. ${km.toFixed(2)} kilometers in ${formatDuration(
             movingMsRef.current / 1000,
           ).replace(/:/g, " ")}. Great work!`
-        : "Run complete.",
+        : `${Noun} complete.`,
     );
   };
 
@@ -440,6 +456,10 @@ export default function RunTracker({
 
   const km = distanceM / 1000;
   const avgPaceS = km > 0.05 ? elapsedS / km : null;
+  // Both derived from the same seconds-per-km; only the unit the rider reads
+  // it in differs. See lib/effort-metric.ts.
+  const avgRate = effortMetric(activity, avgPaceS);
+  const liveRate = effortMetric(activity, currentPaceS, { average: false });
   const progress = routeLengthM > 0 ? Math.min(1, alongRouteM / routeLengthM) : 0;
   const remainingKm = Math.max(0, (routeLengthM - alongRouteM) / 1000);
   // The route the runner actually ran, for the shareable card. Falls back to
@@ -556,8 +576,8 @@ export default function RunTracker({
                     // side by side, and telling the average from the current one
                     // matters more here than a tidy unit-free number column.
                     { label: "Time", value: formatDuration(elapsedS) },
-                    { label: "Avg pace", value: `${formatPace(avgPaceS)} /km` },
-                    { label: "Pace", value: `${formatPace(currentPaceS)} /km` },
+                    { label: avgRate.label, value: `${avgRate.value} ${avgRate.unit}` },
+                    { label: liveRate.label, value: `${liveRate.value} ${liveRate.unit}` },
                   ].map((stat) => (
                     <div key={stat.label} className="flex flex-col-reverse">
                       <dt className="rg-label mt-1.5">{stat.label}</dt>
@@ -620,7 +640,7 @@ export default function RunTracker({
             <div className="pointer-events-auto absolute inset-0 flex items-end justify-center overflow-y-auto bg-canvas/70 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
               <section className="animate-float-in w-full max-w-md rounded-card border border-hairline bg-canvas/90 p-6 shadow-2xl shadow-black/60">
                 <header className="text-center">
-                  <p className="rg-label text-accent">Run complete</p>
+                  <p className="rg-label text-accent">{Noun} complete</p>
                   <h2 className="rg-display mt-2 truncate text-2xl uppercase text-ink">
                     {route.name}
                   </h2>
@@ -637,6 +657,7 @@ export default function RunTracker({
                       distanceKm: km,
                       durationS: elapsedS,
                       avgPaceS,
+                      activity,
                       grade: route.grade,
                       score: route.score,
                       intersectionsPerKm: route.intersections_per_km ?? null,

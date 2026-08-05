@@ -1,3 +1,5 @@
+import { activityOf } from "@/lib/activity-type";
+import type { Activity } from "@/lib/api/routes-client";
 import type { RecordedRun, RunSplit } from "@/lib/api/runs-client";
 import type { Grade } from "@/lib/scorecard";
 
@@ -23,21 +25,41 @@ export type PersonalBest = {
 export type PersonalBests = {
   longestDistanceKm: PersonalBest | null;
   longestDurationS: PersonalBest | null;
+  /** Longest ride, kept apart so it can never be read as a running record. */
+  longestRideKm: PersonalBest | null;
 };
 
 /**
  * "How far" and "how long" records. Speed records live in `distanceRecords`,
  * which measures it over a fixed distance rather than over a whole run.
  *
+ * RUNS AND RIDES ARE KEPT APART. A rider covers 40 km on an easy afternoon, so
+ * a combined "longest" makes every running record unreachable the first time
+ * someone rides, and reports a distance they never ran. The ride equivalent is
+ * reported as its own record instead of being dropped.
+ *
  * Ties keep the earlier run in the list.
  */
-export function personalBests(runs: RecordedRun[]): PersonalBests {
+export function personalBests(entries: RecordedRun[]): PersonalBests {
   const bests: PersonalBests = {
     longestDistanceKm: null,
     longestDurationS: null,
+    longestRideKm: null,
   };
 
-  for (const run of runs) {
+  for (const entry of entries) {
+    if (entry.activity === "ride") {
+      const rideKm = Number(entry.distance_km) || 0;
+      if (rideKm > (bests.longestRideKm?.value ?? 0)) {
+        bests.longestRideKm = {
+          runId: entry.id,
+          startedAt: entry.started_at,
+          value: rideKm,
+        };
+      }
+      continue;
+    }
+    const run = entry;
     const distanceKm = Number(run.distance_km) || 0;
     const durationS = Number(run.duration_s) || 0;
     const at = { runId: run.id, startedAt: run.started_at };
@@ -85,11 +107,16 @@ export type DistanceRecord = {
  * need the raw GPS trace re-walked, which is a much heavier job for a figure
  * that would move by seconds.
  *
+ * RIDES ARE EXCLUDED. "Fastest 5 km" is a running record; a bike covers the
+ * same five kilometres in a third of the time, so one ride would take every
+ * bracket permanently and the board would stop describing the runner at all.
+ *
  * Brackets nobody has run far enough to set are omitted rather than shown
  * empty. Ties keep the earlier run in the list.
  */
-export function distanceRecords(runs: RecordedRun[]): DistanceRecord[] {
+export function distanceRecords(entries: RecordedRun[]): DistanceRecord[] {
   const records: DistanceRecord[] = [];
+  const runs = entries.filter((entry) => entry.activity !== "ride");
 
   for (const bracket of DISTANCE_BRACKETS) {
     let best: DistanceRecord | null = null;
@@ -143,6 +170,8 @@ function fastestWindow(splits: RunSplit[], size: number): number | null {
 export type GradedRoute = {
   grade: Grade;
   score: number;
+  /** Legacy routes have none; `activityOf` reads those as a run. */
+  activity?: Activity | null;
 };
 
 export type GradeProfile = {
@@ -191,4 +220,37 @@ export function summarizeRouteGrades(routes: GradedRoute[]): GradeProfile {
     averageScore: routes.length > 0 ? scoreTotal / routes.length : null,
     commonestGrade,
   };
+}
+
+/** One activity's grade profile, tagged so the UI can name it. */
+export type ActivityGradeProfile = GradeProfile & { activity: Activity };
+
+/**
+ * Grade profiles split by what each route was planned for, best-populated
+ * activity first.
+ *
+ * Splitting matters more here than it looks. The grade measures how good a
+ * route is *for the thing you do on it* — a wide arterial with few crossings is
+ * a fine ride and a miserable run, and the scoring service weighs it that way.
+ * Averaging both into "most of your routes grade B" therefore mixes two
+ * different judgements into one letter that answers neither question.
+ *
+ * Activities with nothing saved are omitted rather than shown empty, so a
+ * runner who has never saved a ride sees exactly what they saw before.
+ */
+export function routeGradesByActivity(
+  routes: GradedRoute[],
+): ActivityGradeProfile[] {
+  const buckets: Record<Activity, GradedRoute[]> = { run: [], ride: [] };
+  for (const route of routes) buckets[activityOf(route)].push(route);
+
+  return (["run", "ride"] as const)
+    .filter((activity) => buckets[activity].length > 0)
+    .map((activity) => ({
+      activity,
+      ...summarizeRouteGrades(buckets[activity]),
+    }))
+    // Most-saved first: whichever the runner mostly does should lead, rather
+    // than "run" always winning a board that a rider fills.
+    .sort((a, b) => b.routes - a.routes);
 }

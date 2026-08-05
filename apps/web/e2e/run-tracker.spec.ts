@@ -217,6 +217,34 @@ test.describe("run tracker · simulate mode", () => {
     await expect(startRunButton(page)).toBeVisible();
   });
 
+  test("a ride tracks in km/h rather than min/km", async ({ page }) => {
+    // Founder request, 2026-08-05. This is the whole chain in one test: the
+    // Run/Ride toggle on the planner, through the plan, into the live tracker's
+    // stat labels. Unit tests cover the conversion; this covers the plumbing.
+    await gotoPlanner(page);
+
+    await page.getByRole("radio", { name: "Ride" }).click();
+    await page.getByPlaceholder(ADDRESS).fill(ADDRESS);
+    await page.getByRole("button", { name: "Find routes" }).click();
+
+    const startRide = page.getByRole("button", { name: "Start ride" });
+    await expect(startRide).toBeVisible();
+    await startRide.click();
+
+    const pause = pauseButton(page);
+    for (let i = 0; i < 15; i++) {
+      if (await pause.isVisible()) break;
+      await page.clock.runFor(1000);
+    }
+    await expect(pause).toBeVisible();
+
+    await advanceRun(page, 60_000);
+
+    // Speed, not pace — and the running labels are gone rather than alongside.
+    await expect(page.getByText("Avg speed", { exact: true })).toBeVisible();
+    await expect(page.getByText("Avg pace", { exact: true })).toHaveCount(0);
+  });
+
   // Off-route detection is intentionally NOT covered here. Simulate mode always
   // walks the literal route geometry via `pointAtDistanceM`, so the runner's
   // projected distance-to-path is ~0 and `offRoute` can never flip. Exercising
