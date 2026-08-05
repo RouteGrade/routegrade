@@ -105,6 +105,24 @@ export function detectInstallPlatform(): InstallPlatform {
 }
 
 /**
+ * Which edge of the screen Safari's toolbar — and so its Share button — is on,
+ * so the step can point at it rather than describe it.
+ *
+ * iPhone puts it at the bottom, iPad at the top. This is a good guess, not a
+ * fact: an iPhone set to the "Single Tab" layout moves the bar to the top, and
+ * nothing exposes that to a page. The copy alongside the pointer therefore says
+ * "in Safari's toolbar" and never "below", so it still reads correctly for the
+ * minority the arrow points the wrong way for.
+ */
+export function safariToolbarEdge(): "top" | "bottom" {
+  if (typeof navigator === "undefined") return "bottom";
+  return /ipad/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && (navigator.maxTouchPoints ?? 0) > 1)
+    ? "top"
+    : "bottom";
+}
+
+/**
  * Whether the step has been turned down before.
  *
  * Storage access throws outright in some embedded webviews, and a browser that

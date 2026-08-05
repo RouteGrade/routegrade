@@ -70,15 +70,29 @@ afterEach(() => {
 });
 
 describe("AddToHomeScreenStep", () => {
-  it("walks an iPhone Safari visitor through the Share sheet", () => {
+  it("shows an iPhone Safari visitor the sheet they're about to open", () => {
     browser({ ua: IPHONE_SAFARI });
     render(<AddToHomeScreenStep />);
 
     expect(
       screen.getByRole("heading", { name: /home screen/i }),
     ).toBeDefined();
+    // The replica, with the target row picked out of its neighbours.
     expect(screen.getByText("Add to Home Screen")).toBeDefined();
+    expect(screen.getByText("Add to Reading List")).toBeDefined();
     expect(screen.getByText("Share")).toBeDefined();
+  });
+
+  it("keeps the steps in words for anyone not reading the screen", () => {
+    // The replica is aria-hidden, so without this list a screen reader would
+    // be handed a heading, a paragraph and nothing to act on.
+    browser({ ua: IPHONE_SAFARI });
+    const { container } = render(<AddToHomeScreenStep />);
+
+    const steps = container.querySelectorAll("ol.sr-only li");
+    expect(steps).toHaveLength(3);
+    expect(steps[0].textContent).toMatch(/share button in safari's toolbar/i);
+    expect(steps[1].textContent).toMatch(/add to home screen/i);
   });
 
   it("sends an in-app browser to Safari, with the link to carry over", () => {

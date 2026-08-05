@@ -6,6 +6,7 @@ import {
   isInstalled,
   isInstallPromptDismissed,
   resetInstallPrompt,
+  safariToolbarEdge,
 } from "./install";
 
 /**
@@ -160,6 +161,27 @@ describe("isInstalled", () => {
   it("is false in a plain browser tab", () => {
     browser({ ua: IPHONE_SAFARI, displayMode: "browser", standalone: false });
     expect(isInstalled()).toBe(false);
+  });
+});
+
+describe("safariToolbarEdge", () => {
+  it("points down on iPhone, where the toolbar is", () => {
+    browser({ ua: IPHONE_SAFARI });
+    expect(safariToolbarEdge()).toBe("bottom");
+  });
+
+  it("points up on iPad, whose toolbar is at the top", () => {
+    browser({ ua: IPAD_SAFARI, platform: "MacIntel", maxTouchPoints: 5 });
+    expect(safariToolbarEdge()).toBe("top");
+  });
+
+  it("guesses bottom when it can't tell", () => {
+    // The pointer is a guess either way — an iPhone on the "Single Tab" layout
+    // has its bar on top and nothing exposes that. Bottom is the common case,
+    // and the copy beside the arrow never says "below", so being wrong here
+    // costs the arrow, not the sentence.
+    browser({ ua: IPHONE_SAFARI, platform: "", maxTouchPoints: 0 });
+    expect(safariToolbarEdge()).toBe("bottom");
   });
 });
 
