@@ -132,7 +132,16 @@ def test_plan_requires_address_or_coordinates(plan_client):
 def test_plan_rejects_out_of_range_distance(plan_client):
     c = plan_client(_planner())
     assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 0.2}).status_code == 422
-    assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 99}).status_code == 422
+    assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 101}).status_code == 422
+
+
+def test_plan_accepts_ride_length_distances(plan_client):
+    """The 100 km ceiling (founder request, 2026-08-05) is what makes the
+    planner usable for a ride; 15 km was a running-only bound."""
+
+    c = plan_client(_planner())
+    assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 100}).status_code == 200
+    assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 60}).status_code == 200
 
 
 def test_plan_unknown_address_maps_to_404(plan_client):
