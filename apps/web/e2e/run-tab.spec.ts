@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { blockExternalRequests, mockRoutePlanning } from "./fixtures/plan";
+import { stepIndexForDistance } from "@/lib/distance-scale";
 
 /**
  * The Run tab's idle screen: a search pill, the run goal in display type, and
@@ -20,6 +21,15 @@ const goalButton = (page: Page) =>
 const findButton = (page: Page) =>
   page.getByRole("button", { name: "Find routes" });
 const distanceSlider = (page: Page) => page.getByLabel("Distance", { exact: true });
+
+/**
+ * The slider's value is a position on the distance ladder, not kilometres
+ * (lib/distance-scale.ts), so these tests ask for a distance and let the shared
+ * module do the conversion rather than hard-coding indices that would drift the
+ * moment the ladder changes.
+ */
+const setDistance = (page: Page, km: number) =>
+  distanceSlider(page).fill(String(stepIndexForDistance(km)));
 
 test.describe("run tab · idle screen", () => {
   test.beforeEach(async ({ page, context }) => {
@@ -49,7 +59,7 @@ test.describe("run tab · idle screen", () => {
     const vibes = page.getByRole("radiogroup", { name: "Route preference" });
     await expect(vibes).toBeVisible();
 
-    await distanceSlider(page).fill("8");
+    await setDistance(page, 8);
     await page.getByRole("radio", { name: "Scenic" }).click();
     await page.getByRole("button", { name: "Done" }).click();
 
@@ -66,7 +76,7 @@ test.describe("run tab · idle screen", () => {
     );
 
     await goalButton(page).click();
-    await distanceSlider(page).fill("3.5");
+    await setDistance(page, 3.5);
     await page.getByRole("radio", { name: "Flat" }).click();
     await page.getByRole("button", { name: "Done" }).click();
 
@@ -78,6 +88,29 @@ test.describe("run tab · idle screen", () => {
     const body = (await planRequest).postDataJSON();
     expect(body.distance_km).toBe(3.5);
     expect(body.preference).toBe("flat");
+  });
+
+  test("the slider reaches ride-length distances", async ({ page }) => {
+    // Founder request, 2026-08-05: 15 km was a running-only ceiling. This is the
+    // behaviour that makes the planner usable for a ride, so it gets its own
+    // test rather than riding along on the 3.5 km case.
+    const planRequest = page.waitForRequest(
+      (req) => req.url().includes("/routes/plan") && req.method() === "POST",
+    );
+
+    await goalButton(page).click();
+    await setDistance(page, 100);
+    await page.getByRole("button", { name: "Done" }).click();
+
+    // Whole numbers past the half-kilometre band read "100", not "100.0".
+    await expect(goalButton(page)).toContainText("100");
+
+    await page
+      .getByPlaceholder("Nathan Phillips Square, Toronto")
+      .fill("Nathan Phillips Square, Toronto");
+    await findButton(page).click();
+
+    expect((await planRequest).postDataJSON().distance_km).toBe(100);
   });
 
   test("a found route can be dismissed to get back to the search", async ({
@@ -103,7 +136,7 @@ test.describe("run tab · idle screen", () => {
     page,
   }) => {
     await goalButton(page).click();
-    await distanceSlider(page).fill("12");
+    await setDistance(page, 12);
     await page.getByRole("button", { name: "Close route options" }).click();
 
     await expect(

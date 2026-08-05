@@ -17,6 +17,7 @@ import {
   type PlannedRoute,
   type Preference,
 } from "@/lib/api/routes-client";
+import { snapDistanceKm } from "@/lib/distance-scale";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { useImmersive } from "./shell/app-shell";
 import {
@@ -211,7 +212,7 @@ export default function RouteExplorer({
           saved: true,
         });
         if (saved.starting_address) setAddress(saved.starting_address);
-        setDistanceKm(Math.min(15, Math.max(1, Math.round(saved.distance_km * 2) / 2)));
+        setDistanceKm(snapDistanceKm(saved.distance_km));
         setPreference(saved.preference);
         setSavedIds((prev) => new Set(prev).add(saved.id));
       } catch {

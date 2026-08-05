@@ -39,7 +39,11 @@ class PlanRequest(BaseModel):
     address: str | None = Field(default=None, min_length=1, max_length=300)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
-    distance_km: float = Field(ge=1, le=30)
+    # Upper bound raised 15 -> 100 km (founder request, 2026-08-05) so the
+    # planner can plan a ride and not just a run. The web slider tops out at the
+    # same 100; this is the wider of the two only in that it accepts any value
+    # in between, not just the slider's steps.
+    distance_km: float = Field(ge=1, le=100)
     preference: Preference = "quiet"
 
     @model_validator(mode="after")

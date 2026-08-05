@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import { AddressAutocomplete } from "@/components/run-tab/address-autocomplete";
+import {
+  MAX_DISTANCE_KM,
+  MAX_STEP_INDEX,
+  MIN_DISTANCE_KM,
+  distanceForStepIndex,
+  formatDistanceKm,
+  stepIndexForDistance,
+} from "@/lib/distance-scale";
 import type { PlaceSuggestion } from "@/lib/api/geocode-suggest";
 import type { Preference } from "@/lib/api/routes-client";
 
@@ -56,9 +64,6 @@ const PREFERENCES: { id: Preference; label: string; icon: React.ReactNode }[] = 
   },
 ];
 
-const MIN_KM = 1;
-const MAX_KM = 15;
-
 export type PlannerHeroProps = {
   address: string;
   onAddressChange: (value: string) => void;
@@ -97,7 +102,11 @@ export function PlannerHero({
   apiOffline,
 }: PlannerHeroProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
-  const sliderProgress = ((distanceKm - MIN_KM) / (MAX_KM - MIN_KM)) * 100;
+  // The slider holds a position on the distance ladder, not kilometres — see
+  // lib/distance-scale.ts for why the two aren't the same thing above 20 km.
+  const stepIndex = stepIndexForDistance(distanceKm);
+  const sliderProgress = (stepIndex / MAX_STEP_INDEX) * 100;
+  const distanceLabel = formatDistanceKm(distanceKm);
   const preferenceLabel =
     PREFERENCES.find((p) => p.id === preference)?.label ?? preference;
 
@@ -151,11 +160,11 @@ export function PlannerHero({
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            aria-label={`Distance ${distanceKm.toFixed(1)} kilometres, ${preferenceLabel} route. Change`}
+            aria-label={`Distance ${distanceLabel} kilometres, ${preferenceLabel} route. Change`}
             className="-mt-2 flex flex-col items-center"
           >
             <span className="rg-metric text-[72px] leading-none text-ink">
-              {distanceKm.toFixed(1)}
+              {distanceLabel}
             </span>
             <span className="rg-label mt-2 flex items-center gap-1.5">
               KM · {preferenceLabel}
@@ -226,24 +235,27 @@ export function PlannerHero({
                   Distance
                 </label>
                 <span className="rg-metric text-3xl text-accent">
-                  {distanceKm.toFixed(1)}
+                  {distanceLabel}
                   <span className="ml-1 text-base text-muted">km</span>
                 </span>
               </div>
               <input
                 id="distance"
                 type="range"
-                min={MIN_KM}
-                max={MAX_KM}
-                step={0.5}
-                value={distanceKm}
-                onChange={(e) => onDistanceChange(Number(e.target.value))}
+                min={0}
+                max={MAX_STEP_INDEX}
+                step={1}
+                value={stepIndex}
+                // Screen readers would otherwise announce the ladder position
+                // ("32 of 68"), which is meaningless — announce kilometres.
+                aria-valuetext={`${distanceLabel} km`}
+                onChange={(e) => onDistanceChange(distanceForStepIndex(Number(e.target.value)))}
                 className="rg-slider"
                 style={{ "--slider-progress": `${sliderProgress}%` } as React.CSSProperties}
               />
               <div className="mt-2 flex justify-between">
-                <span className="rg-label">{MIN_KM} km</span>
-                <span className="rg-label">{MAX_KM} km</span>
+                <span className="rg-label">{MIN_DISTANCE_KM} km</span>
+                <span className="rg-label">{MAX_DISTANCE_KM} km</span>
               </div>
             </div>
 
