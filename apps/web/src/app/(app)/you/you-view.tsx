@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { BrandLoader } from "@/components/brand/brand-loader";
+import { InstallAppRow } from "@/components/pwa/install-app-row";
 import {
   ApiError,
   provisionCurrentUser,
@@ -130,6 +131,7 @@ export function YouView() {
 
       <section aria-label="Settings" className="mt-8">
         <h2 className="rg-label mb-3">Settings</h2>
+        <InstallAppRow />
         <form onSubmit={onSave} className="flex flex-col gap-3">
           <label htmlFor="display_name" className="rg-label">
             Display name
