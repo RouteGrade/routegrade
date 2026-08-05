@@ -113,6 +113,45 @@ test.describe("run tab · idle screen", () => {
     expect((await planRequest).postDataJSON().distance_km).toBe(100);
   });
 
+  test("switching to Ride changes the plan request and the copy", async ({ page }) => {
+    // Founder request, 2026-08-05: biking alongside running.
+    const planRequest = page.waitForRequest(
+      (req) => req.url().includes("/routes/plan") && req.method() === "POST",
+    );
+
+    await page.getByRole("radio", { name: "Ride" }).click();
+
+    // An untouched 5 km run default becomes a ride-shaped 20 km.
+    await expect(goalButton(page)).toContainText("20");
+
+    await goalButton(page).click();
+    await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
+    await page.getByRole("button", { name: "Done" }).click();
+
+    await page
+      .getByPlaceholder("Nathan Phillips Square, Toronto")
+      .fill("Nathan Phillips Square, Toronto");
+    await findButton(page).click();
+
+    const body = (await planRequest).postDataJSON();
+    expect(body.activity).toBe("ride");
+    expect(body.distance_km).toBe(20);
+  });
+
+  test("switching activity keeps a distance the user actually chose", async ({
+    page,
+  }) => {
+    await goalButton(page).click();
+    await setDistance(page, 8);
+    await page.getByRole("button", { name: "Done" }).click();
+
+    await page.getByRole("radio", { name: "Ride" }).click();
+
+    // 8 km was deliberate, so it must survive the switch rather than being
+    // replaced by the ride default.
+    await expect(goalButton(page)).toContainText("8.0");
+  });
+
   test("a found route can be dismissed to get back to the search", async ({
     page,
   }) => {
@@ -130,6 +169,25 @@ test.describe("run tab · idle screen", () => {
     await expect(page.getByRole("button", { name: "Start run" })).toHaveCount(0);
     await expect(findButton(page)).toBeVisible();
     await expect(goalButton(page)).toBeVisible();
+  });
+
+  test("a ride planned without cycling data says so, and does not say Start run", async ({
+    page,
+  }) => {
+    // The honest-degradation path: the server has no bicycle OSRM host (which is
+    // production's actual state today), so the route came off the running graph.
+    // Presenting that silently as a ride is the exact failure mode this guards.
+    await mockRoutePlanning(page, { activity: "ride", activityRouted: false });
+
+    await page.getByRole("radio", { name: "Ride" }).click();
+    await page
+      .getByPlaceholder("Nathan Phillips Square, Toronto")
+      .fill("Nathan Phillips Square, Toronto");
+    await findButton(page).click();
+
+    await expect(page.getByRole("button", { name: "Start ride" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start run" })).toHaveCount(0);
+    await expect(page.getByText(/planned on the running map/i)).toBeVisible();
   });
 
   test("tapping the backdrop dismisses the sheet without losing the change", async ({

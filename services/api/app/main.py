@@ -66,6 +66,17 @@ def create_app() -> FastAPI:
     ):
         logger.warning(warning)
 
+    if settings.osrm_bike_base_url:
+        if warning := warn_if_profile_is_a_no_op(settings.osrm_bike_base_url, "bicycle"):
+            logger.warning("bike graph: %s", warning)
+    else:
+        logger.warning(
+            "OSRM_BIKE_BASE_URL is unset — rides are routed on the running graph "
+            "and graded as if run. Plans report this as activity_routed=false so "
+            "the app can say so; provision a bicycle graph (deploy/osrm/, with "
+            "bicycle.lua in place of foot.lua) to route rides properly."
+        )
+
     # Added before CORS so CORS ends up outermost and its headers are still
     # attached to a 413 rejection (middleware wraps in reverse add order).
     app.add_middleware(

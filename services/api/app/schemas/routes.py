@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 Preference = Literal["quiet", "flat", "scenic"]
 
+# What the route is for. Defaults to "run" everywhere, so an older client that
+# never sends the field keeps behaving exactly as it did.
+Activity = Literal["run", "ride"]
+
 
 class LineStringGeometry(BaseModel):
     """Minimal GeoJSON LineString — the only geometry RouteGrade stores."""
@@ -45,6 +49,7 @@ class PlanRequest(BaseModel):
     # in between, not just the slider's steps.
     distance_km: float = Field(ge=1, le=100)
     preference: Preference = "quiet"
+    activity: Activity = "run"
 
     @model_validator(mode="after")
     def _require_start(self) -> "PlanRequest":
@@ -65,6 +70,7 @@ class CustomRouteRequest(BaseModel):
 
     coordinates: list[list[float]] = Field(min_length=2, max_length=5000)
     preference: Preference = "quiet"
+    activity: Activity = "run"
     name: str | None = Field(default=None, max_length=120)
 
     @field_validator("coordinates")
@@ -218,6 +224,12 @@ class PlanResponse(BaseModel):
     requested_distance_km: float
     preference: Preference
     distance_tolerance: float
+    activity: Activity = "run"
+    # False when a ride was routed on the running graph because no bicycle OSRM
+    # host is configured. The client is expected to say so rather than present a
+    # car-shaped route as a ride — the silent-no-op failure mode we already have
+    # with OSRM_PROFILE is not one to reproduce deliberately.
+    activity_routed: bool = True
     routes: list[PlannedRoute]
 
 
@@ -230,6 +242,7 @@ class SavedRouteSave(BaseModel):
     starting_address: str | None = Field(default=None, max_length=300)
     distance_km: float = Field(gt=0, le=999.99)
     preference: Preference
+    activity: Activity = "run"
     geometry: LineStringGeometry
     elevation_gain_m: float = Field(ge=0)
     # Optional so older clients / free routes without the metric still save;
@@ -255,6 +268,7 @@ class SavedRouteRead(BaseModel):
     starting_address: str | None
     distance_km: float
     preference: Preference
+    activity: Activity
     geometry: LineStringGeometry
     elevation_gain_m: float
     intersections_per_km: float | None

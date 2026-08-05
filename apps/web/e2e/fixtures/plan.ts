@@ -58,8 +58,16 @@ export const ROUTE_DISTANCE_KM = Number((ROUTE_LENGTH_M / 1000).toFixed(2));
 
 export const FIXTURE_ROUTE_NAME = "Simulated Test Loop";
 
-/** A single-candidate PlanResponse matching `routes-client.ts`'s contract. */
-export function planResponseBody() {
+/**
+ * A single-candidate PlanResponse matching `routes-client.ts`'s contract.
+ *
+ * `activityRouted: false` simulates a server with no bicycle OSRM host — the
+ * state production is actually in today — so the "planned on the running map"
+ * caveat can be driven from a test.
+ */
+export function planResponseBody(
+  overrides: { activity?: "run" | "ride"; activityRouted?: boolean } = {},
+) {
   return {
     start: {
       latitude: ROUTE_COORDINATES[0][1],
@@ -69,6 +77,8 @@ export function planResponseBody() {
     requested_distance_km: 2.5,
     preference: "quiet" as const,
     distance_tolerance: 0.2,
+    activity: overrides.activity ?? ("run" as const),
+    activity_routed: overrides.activityRouted ?? true,
     routes: [
       {
         id: "11111111-1111-4111-8111-111111111111",
@@ -96,12 +106,15 @@ export function planResponseBody() {
  * poll (the pill just shows "offline", which is irrelevant here) to avoid
  * console noise from unreachable-backend fetches during the run.
  */
-export async function mockRoutePlanning(page: Page): Promise<void> {
+export async function mockRoutePlanning(
+  page: Page,
+  overrides: { activity?: "run" | "ride"; activityRouted?: boolean } = {},
+): Promise<void> {
   await page.route("**/v1/routes/plan", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(planResponseBody()),
+      body: JSON.stringify(planResponseBody(overrides)),
     });
   });
 

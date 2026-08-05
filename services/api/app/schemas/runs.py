@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.routes import LineStringGeometry
+from app.schemas.routes import Activity, LineStringGeometry
 
 
 class RunSplit(BaseModel):
@@ -26,6 +26,7 @@ class RunSave(BaseModel):
 
     route_id: uuid.UUID | None = None
     route_name: str | None = Field(default=None, max_length=120)
+    activity: Activity = "run"
     started_at: datetime
     duration_s: int = Field(gt=0, le=86_400)
     distance_km: float = Field(ge=0, le=999.999)
@@ -40,6 +41,7 @@ class RunRead(BaseModel):
     id: uuid.UUID
     route_id: uuid.UUID | None
     route_name: str | None
+    activity: Activity
     started_at: datetime
     duration_s: int
     distance_km: float

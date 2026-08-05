@@ -79,6 +79,18 @@ class Settings(BaseSettings):
             "demo server only serves `driving`."
         ),
     )
+    osrm_bike_base_url: str | None = Field(
+        default=None,
+        description=(
+            "OSRM host serving a *bicycle* graph, used when a plan asks for a "
+            "ride. A single osrm-routed process serves exactly one graph — the "
+            "profile is baked in at osrm-extract time and the profile segment in "
+            "the request path is decorative — so riding genuinely needs its own "
+            "host, not a different profile against the running one. Unset means "
+            "rides fall back to the running host and are NOT bike-routed; the "
+            "plan response reports that via activity_routed=false."
+        ),
+    )
     elevation_base_url: str = Field(
         default="https://api.open-elevation.com",
         description="Open-Elevation-compatible elevation endpoint",

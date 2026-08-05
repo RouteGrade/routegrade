@@ -44,11 +44,25 @@ class RoutePlanner:
         routing: RoutingEngine,
         elevation: ElevationProvider,
         distance_tolerance: float = 0.10,
+        bike_routing: RoutingEngine | None = None,
     ) -> None:
         self._geocoder = geocoder
         self._routing = routing
         self._elevation = elevation
         self._tolerance = distance_tolerance
+        # A separate engine because a bicycle graph is a separate OSRM host, not
+        # a different profile on the same one (see Settings.osrm_bike_base_url).
+        # None means rides are routed on the running graph and said so about.
+        self._bike_routing = bike_routing
+
+    def _engine_for(self, activity: str) -> tuple[RoutingEngine, bool]:
+        """The engine to route `activity` with, and whether it truly fits it."""
+
+        if activity == "ride":
+            if self._bike_routing is None:
+                return self._routing, False
+            return self._bike_routing, True
+        return self._routing, True
 
     def plan(self, request: PlanRequest) -> PlanResponse:
         start = self._resolve_start(request)
@@ -77,6 +91,8 @@ class RoutePlanner:
             requested_distance_km=request.distance_km,
             preference=request.preference,
             distance_tolerance=self._tolerance,
+            activity=request.activity,
+            activity_routed=self._engine_for(request.activity)[1],
             routes=candidates,
         )
 
@@ -97,7 +113,12 @@ class RoutePlanner:
         )
 
     def grade_drawn(
-        self, *, coordinates: list[list[float]], preference: str, name: str
+        self,
+        *,
+        coordinates: list[list[float]],
+        preference: str,
+        name: str,
+        activity: str = "run",
     ) -> PlannedRoute:
         """Snap a user-drawn trace to streets and score it like a planned route.
 
@@ -107,7 +128,8 @@ class RoutePlanner:
         true.
         """
 
-        generated = self._routing.snap_trace(coordinates)
+        engine, _ = self._engine_for(activity)
+        generated = engine.snap_trace(coordinates)
 
         profile = self._elevation.elevations(sample_coordinates(generated.coordinates))
         gain = scoring.elevation_gain_m(profile)
@@ -192,7 +214,8 @@ class RoutePlanner:
         bearing_deg: float,
         label: str,
     ) -> PlannedRoute:
-        generated = self._routing.generate_loop(
+        engine, _ = self._engine_for(request.activity)
+        generated = engine.generate_loop(
             latitude=start.latitude,
             longitude=start.longitude,
             distance_km=request.distance_km,

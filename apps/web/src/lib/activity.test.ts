@@ -13,6 +13,7 @@ function run(partial: Partial<RecordedRun>): RecordedRun {
     id: "r",
     route_id: null,
     route_name: null,
+    activity: "run",
     started_at: "2026-07-01T10:00:00Z",
     duration_s: 0,
     distance_km: 0,

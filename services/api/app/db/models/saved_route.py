@@ -36,6 +36,10 @@ class SavedRoute(Base):
     starting_address: Mapped[str | None] = mapped_column(String, nullable=True)
     distance_km: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     preference: Mapped[str] = mapped_column(String, nullable=False)
+    # "run" | "ride" — what the route was planned for. See migration 0008.
+    activity: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="run", default="run"
+    )
     geometry: Mapped[dict[str, Any]] = mapped_column(_GeometryJSON, nullable=False)
     elevation_gain_m: Mapped[Decimal] = mapped_column(Numeric(6, 1), nullable=False)
     # Intersection density (maneuvers per km). Nullable: legacy rows saved

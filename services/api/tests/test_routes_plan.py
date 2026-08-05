@@ -81,13 +81,14 @@ def plan_client(client, app_with_overrides):
 
 
 def _planner(
-    geocoder=None, routing=None, elevation=None, tolerance: float = 0.10
+    geocoder=None, routing=None, elevation=None, tolerance: float = 0.10, bike_routing=None
 ) -> RoutePlanner:
     return RoutePlanner(
         geocoder=geocoder or StubGeocoder(),
         routing=routing or StubRouting(),
         elevation=elevation or StubElevation(),
         distance_tolerance=tolerance,
+        bike_routing=bike_routing,
     )
 
 
@@ -142,6 +143,65 @@ def test_plan_accepts_ride_length_distances(plan_client):
     c = plan_client(_planner())
     assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 100}).status_code == 200
     assert c.post("/v1/routes/plan", json={"address": "x", "distance_km": 60}).status_code == 200
+
+
+def test_plan_defaults_to_a_run(plan_client):
+    """An older client that never sends `activity` must keep working unchanged."""
+
+    c = plan_client(_planner())
+    body = c.post("/v1/routes/plan", json={"address": "Toronto", "distance_km": 5}).json()
+    assert body["activity"] == "run"
+    assert body["activity_routed"] is True
+
+
+def test_ride_without_a_bike_graph_is_reported_as_not_bike_routed(plan_client):
+    """The whole point of activity_routed: a ride routed on the running graph
+    must SAY so. Silently serving a run-shaped route as a ride would repeat the
+    OSRM_PROFILE no-op that already corrupts grades."""
+
+    running = StubRouting()
+    c = plan_client(_planner(routing=running))
+
+    body = c.post(
+        "/v1/routes/plan", json={"address": "Toronto", "distance_km": 40, "activity": "ride"}
+    ).json()
+
+    assert body["activity"] == "ride"
+    assert body["activity_routed"] is False
+    # It still returns usable routes — degraded, not broken.
+    assert len(body["routes"]) == 3
+    assert running.calls == 3
+
+
+def test_ride_uses_the_bike_graph_when_one_is_configured(plan_client):
+    running, biking = StubRouting(), StubRouting()
+    c = plan_client(_planner(routing=running, bike_routing=biking))
+
+    body = c.post(
+        "/v1/routes/plan", json={"address": "Toronto", "distance_km": 40, "activity": "ride"}
+    ).json()
+
+    assert body["activity_routed"] is True
+    assert biking.calls == 3
+    assert running.calls == 0, "a ride must not touch the running graph"
+
+
+def test_a_run_never_uses_the_bike_graph(plan_client):
+    running, biking = StubRouting(), StubRouting()
+    c = plan_client(_planner(routing=running, bike_routing=biking))
+
+    c.post("/v1/routes/plan", json={"address": "Toronto", "distance_km": 5, "activity": "run"})
+
+    assert running.calls == 3
+    assert biking.calls == 0
+
+
+def test_plan_rejects_an_unknown_activity(plan_client):
+    c = plan_client(_planner())
+    res = c.post(
+        "/v1/routes/plan", json={"address": "x", "distance_km": 5, "activity": "swim"}
+    )
+    assert res.status_code == 422
 
 
 def test_plan_unknown_address_maps_to_404(plan_client):

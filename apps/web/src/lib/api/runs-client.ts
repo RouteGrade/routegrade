@@ -1,7 +1,7 @@
 "use client";
 
 import { request } from "@/lib/api/authenticated-client";
-import type { LineStringGeometry } from "@/lib/api/routes-client";
+import type { Activity, LineStringGeometry } from "@/lib/api/routes-client";
 
 export type RunSplit = {
   km: number;
@@ -12,6 +12,9 @@ export type RecordedRun = {
   id: string;
   route_id: string | null;
   route_name: string | null;
+  /** Whether this was a run or a ride. Runs recorded before 2026-08-05 read
+   *  back as "run", which is what they were. */
+  activity: Activity;
   started_at: string;
   duration_s: number;
   distance_km: number;
