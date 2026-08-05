@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { EmailMagicLinkForm } from "@/components/auth/EmailMagicLinkForm";
 import { RouteGradeMark } from "@/components/brand/route-grade-logo";
+import { AddToHomeScreenStep } from "@/components/pwa/add-to-home-screen";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { safeRedirect } from "@/lib/utils/safe-redirect";
 
@@ -30,6 +31,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="flex min-h-dvh w-full items-center justify-center bg-canvas p-6">
+      {/* Overlays this screen on a phone that could install the app, so the
+          offer is the first thing a new visitor sees. Renders nothing on
+          desktop, in the native shell, or once installed — see the component. */}
+      <AddToHomeScreenStep />
       <section className="w-full max-w-sm rounded-card border border-hairline bg-surface p-6 shadow-2xl shadow-black/60">
         <header className="mb-6 flex items-center gap-3">
           <RouteGradeMark />
