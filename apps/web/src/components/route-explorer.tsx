@@ -13,10 +13,12 @@ import {
   planRoute,
   saveRoute,
   snapRoute,
+  type Activity,
   type PlanResponse,
   type PlannedRoute,
   type Preference,
 } from "@/lib/api/routes-client";
+import { DEFAULT_DISTANCE_KM, distanceAfterActivityChange } from "@/lib/activity-type";
 import { snapDistanceKm } from "@/lib/distance-scale";
 import { useRouteDraw } from "@/lib/route-draw/use-route-draw";
 import { useImmersive } from "./shell/app-shell";
@@ -59,6 +61,8 @@ type GuestPlanStash = {
   coords: { latitude: number; longitude: number } | null;
   distanceKm: number;
   preference: Preference;
+  // Optional so a stash written before rides existed still rehydrates.
+  activity?: Activity;
   plan: PlanResponse;
   activeIndex: number;
 };
@@ -115,7 +119,8 @@ export default function RouteExplorer({
   >(null);
   // Where to point the map camera — set to the runner's location on first load.
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
-  const [distanceKm, setDistanceKm] = useState(5);
+  const [distanceKm, setDistanceKm] = useState(DEFAULT_DISTANCE_KM.run);
+  const [activity, setActivity] = useState<Activity>("run");
   const [preference, setPreference] = useState<Preference>("quiet");
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -238,6 +243,7 @@ export default function RouteExplorer({
       setCoords(stash.coords);
       setDistanceKm(stash.distanceKm);
       setPreference(stash.preference);
+      setActivity(stash.activity ?? "run");
       setPlan(stash.plan);
       setActiveIndex(stash.activeIndex);
     }, 0);
@@ -386,6 +392,7 @@ export default function RouteExplorer({
       const route = await gradeCustomRoute({
         coordinates: draw.coordinates,
         preference,
+        activity,
         name: customName.trim() || undefined,
       });
       const [lng, lat] = route.geometry.coordinates[0];
@@ -394,6 +401,11 @@ export default function RouteExplorer({
         requested_distance_km: route.distance_km,
         preference,
         distance_tolerance: 0,
+        activity,
+        // /custom returns just the route, with no report on which graph served
+        // it. Don't invent a caveat for a drawn route — the user chose the
+        // streets themselves, so routing quality is far less of a claim.
+        activity_routed: true,
         routes: [route],
       });
       setActiveIndex(0);
@@ -435,6 +447,11 @@ export default function RouteExplorer({
   };
 
   const handleUseMyLocation = () => locateUser();
+
+  const handleActivityChange = (next: Activity) => {
+    setDistanceKm((km) => distanceAfterActivityChange(activity, next, km));
+    setActivity(next);
+  };
 
   // First landing (after the login/entry gate): snap the map to the runner's
   // current location. Skips a deep-linked saved route and a restored guest plan
@@ -479,6 +496,7 @@ export default function RouteExplorer({
             : { address: trimmed }),
         distance_km: distanceKm,
         preference,
+        activity,
       });
       setPlan(response);
       setActiveIndex(0);
@@ -851,6 +869,8 @@ export default function RouteExplorer({
           locating={locating}
           distanceKm={distanceKm}
           onDistanceChange={setDistanceKm}
+          activity={activity}
+          onActivityChange={handleActivityChange}
           preference={preference}
           onPreferenceChange={setPreference}
           searching={searching}
@@ -895,12 +915,18 @@ export default function RouteExplorer({
               coords,
               distanceKm,
               preference,
+              activity,
               plan,
               activeIndex,
             });
           }}
           onStartRun={handleStartRun}
           onShare={() => setScorecardOpen(true)}
+          activity={activity}
+          // A reopened saved route has no plan response behind it, so there is
+          // nothing to caveat — default to true rather than warning about a
+          // route this session never planned.
+          activityRouted={plan?.activity_routed ?? true}
         />
       )}
 

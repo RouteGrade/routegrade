@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AddressAutocomplete } from "@/components/run-tab/address-autocomplete";
+import { activityCopy } from "@/lib/activity-type";
 import {
   MAX_DISTANCE_KM,
   MAX_STEP_INDEX,
@@ -11,7 +12,31 @@ import {
   stepIndexForDistance,
 } from "@/lib/distance-scale";
 import type { PlaceSuggestion } from "@/lib/api/geocode-suggest";
-import type { Preference } from "@/lib/api/routes-client";
+import type { Activity, Preference } from "@/lib/api/routes-client";
+
+const ACTIVITIES: { id: Activity; icon: React.ReactNode }[] = [
+  {
+    id: "run",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <circle cx="13" cy="4" r="1" />
+        <path d="m9 20 3-6 3 2 2 4" />
+        <path d="M6 12 8 8l4-1 3 3 3 1" />
+      </svg>
+    ),
+  },
+  {
+    id: "ride",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <circle cx="5.5" cy="17.5" r="3.5" />
+        <circle cx="18.5" cy="17.5" r="3.5" />
+        <circle cx="15" cy="5" r="1" />
+        <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+      </svg>
+    ),
+  },
+];
 
 /**
  * The Run tab's idle state: a full-bleed map with a search pill at the top and,
@@ -75,6 +100,8 @@ export type PlannerHeroProps = {
   locating: boolean;
   distanceKm: number;
   onDistanceChange: (km: number) => void;
+  activity: Activity;
+  onActivityChange: (activity: Activity) => void;
   preference: Preference;
   onPreferenceChange: (preference: Preference) => void;
   searching: boolean;
@@ -93,6 +120,8 @@ export function PlannerHero({
   locating,
   distanceKm,
   onDistanceChange,
+  activity,
+  onActivityChange,
   preference,
   onPreferenceChange,
   searching,
@@ -107,6 +136,7 @@ export function PlannerHero({
   const stepIndex = stepIndexForDistance(distanceKm);
   const sliderProgress = (stepIndex / MAX_STEP_INDEX) * 100;
   const distanceLabel = formatDistanceKm(distanceKm);
+  const copy = activityCopy(activity);
   const preferenceLabel =
     PREFERENCES.find((p) => p.id === preference)?.label ?? preference;
 
@@ -157,11 +187,39 @@ export function PlannerHero({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center">
         <div className="pointer-events-none h-40 w-full bg-linear-to-t from-canvas via-canvas/80 to-transparent" />
         <div className="pointer-events-auto flex w-full flex-col items-center gap-5 bg-canvas px-5 pb-7">
+          {/* Run/Ride sits outside the options sheet: it changes what every
+              other control on the screen means, so it shouldn't be something
+              you have to go looking for. */}
+          <div
+            role="radiogroup"
+            aria-label="Activity"
+            className="-mt-3 flex rounded-full border border-hairline bg-surface p-1"
+          >
+            {ACTIVITIES.map((option) => {
+              const selected = activity === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => onActivityChange(option.id)}
+                  className={`flex h-9 items-center gap-2 rounded-full px-5 text-xs font-bold uppercase tracking-wider transition-colors ${
+                    selected ? "bg-accent text-canvas" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {option.icon}
+                  {activityCopy(option.id).toggleLabel}
+                </button>
+              );
+            })}
+          </div>
+
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            aria-label={`Distance ${distanceLabel} kilometres, ${preferenceLabel} route. Change`}
-            className="-mt-2 flex flex-col items-center"
+            aria-label={`Distance ${distanceLabel} kilometres, ${preferenceLabel} ${copy.noun}. Change`}
+            className="flex flex-col items-center"
           >
             <span className="rg-metric text-[72px] leading-none text-ink">
               {distanceLabel}
@@ -219,7 +277,7 @@ export function PlannerHero({
           />
           <div className="animate-rise-in rounded-t-[28px] border-t border-hairline bg-surface px-5 pb-7 pt-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="rg-display text-2xl uppercase text-ink">Your run</h2>
+              <h2 className="rg-display text-2xl uppercase text-ink">{copy.sheetTitle}</h2>
               <button
                 type="button"
                 onClick={() => setSheetOpen(false)}

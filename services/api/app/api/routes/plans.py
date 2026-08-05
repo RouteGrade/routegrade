@@ -56,6 +56,18 @@ def get_route_planner(
             profile=settings.osrm_profile,
             timeout=settings.provider_timeout_seconds,
         ),
+        # Only built when a bicycle graph is actually hosted somewhere. Left as
+        # None otherwise, which is what makes a ride report activity_routed=false
+        # instead of quietly handing back a route off the running graph.
+        bike_routing=(
+            OSRMRoutingEngine(
+                settings.osrm_bike_base_url,
+                profile="bicycle",
+                timeout=settings.provider_timeout_seconds,
+            )
+            if settings.osrm_bike_base_url
+            else None
+        ),
         elevation=OpenElevationClient(
             settings.elevation_base_url,
             timeout=settings.provider_timeout_seconds,
@@ -178,6 +190,7 @@ def grade_custom_route(
             coordinates=payload.coordinates,
             preference=payload.preference,
             name=name,
+            activity=payload.activity,
         )
     except ProviderError:
         raise HTTPException(

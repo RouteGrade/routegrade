@@ -24,6 +24,7 @@ scoring** and returns scored GeoJSON loops.
 | `GEOCODER_USER_AGENT` | `RouteGrade/0.1 (routegrade-api)` | Required by Nominatim's usage policy — set a real contact. |
 | `OSRM_BASE_URL` | `https://router.project-osrm.org` | Point at your self-hosted OSRM in production. |
 | `OSRM_PROFILE` | `foot` | Public demo only serves `driving`. |
+| `OSRM_BIKE_BASE_URL` | unset | Separate host serving a **bicycle** graph, for `activity: "ride"` plans. See below. |
 | `ELEVATION_BASE_URL` | `https://api.open-elevation.com` | Any Open-Elevation-compatible endpoint. |
 | `PROVIDER_TIMEOUT_SECONDS` | `10` | Per outbound call. |
 | `ROUTE_PLAN_DISTANCE_TOLERANCE` | `0.10` | Documented ±10% target; out-of-tolerance candidates are flagged, not hidden. |
@@ -77,6 +78,28 @@ Once it is serving:
 OSRM_BASE_URL=http://localhost:5000   # or https://osrm.your-domain.com
 OSRM_PROFILE=foot                     # now actually meaningful
 ```
+
+## Riding needs a second host, not a second profile
+
+A single `osrm-routed` process serves exactly one graph. The profile is chosen
+at `osrm-extract -p <profile>.lua` time and baked into the preprocessed data;
+the `/route/v1/{profile}/` segment in the request path is decorative and does
+not select anything. This is the same mechanism behind the demo-server no-op
+above, seen from the other side.
+
+So supporting `activity: "ride"` means running a **second** OSRM instance built
+from `bicycle.lua`, and pointing `OSRM_BIKE_BASE_URL` at it:
+
+```bash
+# Build a second graph with bicycle.lua in place of foot.lua, serve it on 5001.
+OSRM_BIKE_BASE_URL=http://localhost:5001
+```
+
+**When it is unset, rides still work — they are just routed on the running
+graph and are not bike-routed.** That is not hidden: `POST /v1/routes/plan`
+returns `activity_routed: false`, the app shows "planned on the running map",
+and the API logs a warning at startup. Degrading loudly is deliberate, given
+how much damage the silent `OSRM_PROFILE` no-op did.
 
 ## How loop generation works
 

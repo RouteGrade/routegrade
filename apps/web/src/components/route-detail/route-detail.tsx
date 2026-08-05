@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { PlannedRoute } from "@/lib/api/routes-client";
+import type { Activity, PlannedRoute } from "@/lib/api/routes-client";
+import { activityCopy } from "@/lib/activity-type";
 import { GRADE_META, deriveReasons, type Grade } from "@/lib/scorecard";
 import { GradeFeedback } from "./grade-feedback";
 
@@ -35,6 +36,13 @@ export type RouteDetailProps = {
   onStashPlan: () => void;
   onStartRun: () => void;
   onShare: () => void;
+  activity: Activity;
+  /**
+   * False when a ride was routed on the running graph because the server has no
+   * bicycle OSRM host. Shown rather than hidden: a route that was not actually
+   * bike-routed must not present itself as one.
+   */
+  activityRouted: boolean;
 };
 
 export function RouteDetail({
@@ -50,6 +58,8 @@ export function RouteDetail({
   onStashPlan,
   onStartRun,
   onShare,
+  activity,
+  activityRouted,
 }: RouteDetailProps) {
   const meta = GRADE_META[route.grade as Grade] ?? null;
   const estMinutes = Math.round(route.distance_km * PACE_MIN_PER_KM);
@@ -207,12 +217,19 @@ export function RouteDetail({
       {/* Actions stay pinned: on a long breakdown, "start run" must never be
           the thing you have to scroll to find. */}
       <div className="shrink-0 border-t border-hairline px-5 pb-6 pt-4">
+        {activity === "ride" && !activityRouted && (
+          <p className="mb-3 rounded-control bg-raised px-3 py-2 text-xs leading-relaxed text-muted">
+            Planned on the running map — this server has no cycling route data
+            yet, so treat the grade as a running grade.
+          </p>
+        )}
+
         <button
           type="button"
           onClick={onStartRun}
           className="rg-btn rg-btn-primary w-full text-base"
         >
-          Start run
+          {activityCopy(activity).startLabel}
         </button>
 
         <div className="mt-3 flex gap-3">

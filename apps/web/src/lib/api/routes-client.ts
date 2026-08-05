@@ -4,6 +4,9 @@ import { API_BASE, ApiError, request } from "@/lib/api/authenticated-client";
 
 export type Preference = "quiet" | "flat" | "scenic";
 
+/** What the route is for. Everything defaults to "run". */
+export type Activity = "run" | "ride";
+
 export type LineStringGeometry = {
   type: "LineString";
   coordinates: [number, number][];
@@ -34,6 +37,11 @@ export type PlanResponse = {
   requested_distance_km: number;
   preference: Preference;
   distance_tolerance: number;
+  activity: Activity;
+  // False when a ride was routed on the running graph because the server has no
+  // bicycle OSRM host. Surfaced to the user rather than swallowed — a route
+  // that isn't actually bike-routed shouldn't look like one.
+  activity_routed: boolean;
   routes: PlannedRoute[];
 };
 
@@ -43,6 +51,7 @@ export type PlanRequest = {
   longitude?: number;
   distance_km: number;
   preference: Preference;
+  activity?: Activity;
 };
 
 export type SavedRoute = {
@@ -87,6 +96,7 @@ export async function planRoute(body: PlanRequest): Promise<PlanResponse> {
 export type CustomRouteRequest = {
   coordinates: [number, number][];
   preference: Preference;
+  activity?: Activity;
   name?: string;
 };
 
