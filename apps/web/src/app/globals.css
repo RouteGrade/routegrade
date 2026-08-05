@@ -334,6 +334,77 @@ body {
   }
 }
 
+/* --- Add to Home Screen step ----------------------------------------------
+   iOS has no install API, so the step can only show the user where to tap. The
+   replica share sheet does the recognising; these two animations do the
+   pointing — the target row breathes, and a chevron nudges toward the screen
+   edge Safari's real Share button is on.
+
+   The row colours are written out rather than using --color-accent-wash: the
+   pulse needs two intensities of it, and the token only carries one.
+--------------------------------------------------------------------------- */
+
+.rg-install-row {
+  animation: install-row-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes install-row-glow {
+  0%,
+  100% {
+    background-color: rgba(24, 204, 212, 0.1);
+  }
+  50% {
+    background-color: rgba(24, 204, 212, 0.22);
+  }
+}
+
+.rg-install-hint {
+  animation: install-hint-bob 1.7s ease-in-out infinite;
+}
+
+@keyframes install-hint-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+}
+
+/* iPad's toolbar is at the top, so the same hint has to nudge the other way. */
+.rg-install-hint-up {
+  animation-name: install-hint-bob-up;
+}
+
+@keyframes install-hint-bob-up {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+/* Motion is the pointer here, so reduced-motion gets the end state of both:
+   the row stays lit and the chevron stays fully opaque. */
+@media (prefers-reduced-motion: reduce) {
+  .rg-install-row {
+    animation: none;
+    background-color: rgba(24, 204, 212, 0.18);
+  }
+
+  .rg-install-hint {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* --- Motion --------------------------------------------------------------- */
 
 /* Countdown numbers pop in then settle */

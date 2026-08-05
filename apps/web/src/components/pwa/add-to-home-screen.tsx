@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RouteGradeMark } from "@/components/brand/route-grade-logo";
+import { safariToolbarEdge } from "@/lib/pwa/install";
 import { useInstallPrompt } from "./use-install-prompt";
 
 /**
@@ -38,22 +39,174 @@ function ShareGlyph({ className }: { className?: string }) {
   );
 }
 
-/** The "Add to Home Screen" row icon: a plus in a rounded square. */
-function AddToHomeGlyph({ className }: { className?: string }) {
+/**
+ * iOS "Add to Home Screen": a plus in a rounded square. The one glyph in the
+ * replica that has to be exact — it is what the user is scanning for.
+ */
+const ADD_TO_HOME_ICON = (
+  <>
+    <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="4.75" />
+    <path d="M12 8.25v7.5M8.25 12h7.5" />
+  </>
+);
+
+/**
+ * The neighbouring rows in the replica. They exist to make the sheet
+ * recognisable at a glance, so they only need to carry the right silhouette —
+ * the one row that has to be exact is `AddToHomeGlyph` above.
+ */
+const NEIGHBOUR_ROWS: { label: string; icon: React.ReactNode }[] = [
+  {
+    label: "Copy",
+    icon: (
+      <>
+        <rect x="8.5" y="3.5" width="12" height="14" rx="2.5" />
+        <path d="M15.5 20.5h-11a1 1 0 0 1-1-1v-13" />
+      </>
+    ),
+  },
+  {
+    label: "Add to Reading List",
+    icon: (
+      <>
+        <circle cx="6.5" cy="14" r="3.25" />
+        <circle cx="17.5" cy="14" r="3.25" />
+        <path d="M9.75 13.5a3 3 0 0 1 4.5 0M3.25 12l1.5-3.5M20.75 12l-1.5-3.5" />
+      </>
+    ),
+  },
+  {
+    label: "Add Bookmark",
+    icon: <path d="M6.5 3.5h11v17l-5.5-4-5.5 4z" />,
+  },
+];
+
+const MARKUP_ROW = {
+  label: "Markup",
+  icon: (
+    <>
+      <path d="M4 20h4l10.5-10.5a2.12 2.12 0 0 0-3-3L5 17v3z" />
+      <path d="M14.5 5.5l4 4" />
+    </>
+  ),
+};
+
+function SheetRow({
+  label,
+  icon,
+  highlighted = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  highlighted?: boolean;
+}) {
   return (
+    <div
+      className={`flex items-center justify-between px-4 py-3 ${
+        highlighted ? "rg-install-row" : ""
+      }`}
+    >
+      <span
+        className={`text-[15px] ${
+          highlighted ? "font-semibold text-ink" : "text-muted"
+        }`}
+      >
+        {label}
+      </span>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={`h-[18px] w-[18px] shrink-0 ${
+          highlighted ? "text-accent" : "text-faint"
+        }`}
+      >
+        {icon}
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * A replica of the iOS Share sheet with the one row that matters lit up.
+ *
+ * This is the whole point of the redesign: a numbered list asks the user to
+ * read three sentences and then go hunting through a sheet of a dozen
+ * near-identical rows. A picture of the sheet turns that into recognition.
+ *
+ * Purely decorative — `aria-hidden`, with the real instructions carried by the
+ * visually-hidden list beside it.
+ */
+function ShareSheetReplica({ host }: { host: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="overflow-hidden rounded-card border border-hairline bg-surface"
+    >
+      <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
+        <RouteGradeMark size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-ink">
+            RouteGrade
+          </span>
+          <span className="block truncate text-xs text-faint">{host}</span>
+        </span>
+      </div>
+
+      <div className="divide-y divide-hairline">
+        {NEIGHBOUR_ROWS.map((row) => (
+          <SheetRow key={row.label} {...row} />
+        ))}
+        <SheetRow label="Add to Home Screen" highlighted icon={ADD_TO_HOME_ICON} />
+        <SheetRow {...MARKUP_ROW} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Points at the edge Safari's toolbar is actually on. The copy says "in
+ * Safari's toolbar" rather than "below", because the arrow is a good guess and
+ * the sentence has to survive being wrong — see `safariToolbarEdge`.
+ */
+function ToolbarHint({ edge }: { edge: "top" | "bottom" }) {
+  const chevron = (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={2.2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className={className}
+      className={`rg-install-hint h-5 w-5 text-accent ${
+        edge === "top" ? "rg-install-hint-up" : ""
+      }`}
     >
-      <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="4.75" />
-      <path d="M12 8.25v7.5M8.25 12h7.5" />
+      {edge === "top" ? <path d="M18 15l-6-6-6 6" /> : <path d="M6 9l6 6 6-6" />}
     </svg>
+  );
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`flex flex-col items-center gap-2 ${
+        edge === "top" ? "flex-col-reverse" : ""
+      }`}
+    >
+      <p className="text-center text-sm text-muted">
+        Tap
+        <InlineGlyph>
+          <ShareGlyph className="h-[1.15em] w-[1.15em]" />
+        </InlineGlyph>
+        <span className="font-semibold text-ink">Share</span>{" "}
+        in Safari&apos;s toolbar to open it
+      </p>
+      {chevron}
+    </div>
   );
 }
 
@@ -103,6 +256,9 @@ export function AddToHomeScreenStep({ open, onClose }: Props) {
 
   const controlled = onClose !== undefined;
   const close = controlled ? onClose : dismiss;
+  // Safe to read during render: nothing below this point renders until
+  // `platform` is non-null, which only happens after the client has mounted.
+  const toolbarEdge = platform === "ios-safari" ? safariToolbarEdge() : "bottom";
 
   // `platform` is null until detection runs on the client — see the hook. On
   // "none" (desktop, already installed, native shell) there is nothing to offer.
@@ -154,30 +310,33 @@ export function AddToHomeScreenStep({ open, onClose }: Props) {
 
         {platform === "ios-safari" && (
           <>
-            <ol className="mt-7 flex flex-col gap-4">
-              <Step n={1}>
-                Tap
-                <InlineGlyph>
-                  <ShareGlyph className="h-[1.15em] w-[1.15em]" />
-                </InlineGlyph>
-                <span className="text-ink">Share</span> in the Safari toolbar.
-              </Step>
-              <Step n={2}>
-                Scroll down and tap
-                <InlineGlyph>
-                  <AddToHomeGlyph className="h-[1.15em] w-[1.15em]" />
-                </InlineGlyph>
-                <span className="text-ink">Add to Home Screen</span>.
-              </Step>
-              <Step n={3}>
-                Tap <span className="text-ink">Add</span>, then open RouteGrade
-                from your Home Screen.
-              </Step>
+            {/* iOS exposes no install API, so this is as close to a one-tap
+                button as the platform allows: show the sheet they're about to
+                see, with the row they need already picked out. */}
+            <div className="mt-7">
+              <ShareSheetReplica host={window.location.host} />
+            </div>
+
+            {/* The replica is a picture; these are the same instructions in
+                words, for anyone not reading the screen. */}
+            <ol className="sr-only">
+              <li>Tap the Share button in Safari&apos;s toolbar.</li>
+              <li>Scroll down the share sheet and tap Add to Home Screen.</li>
+              <li>
+                Tap Add, then open RouteGrade from your Home Screen.
+              </li>
             </ol>
-            <p className="mt-6 text-xs leading-relaxed text-faint">
+
+            <p className="mt-5 text-xs leading-relaxed text-faint">
               Worth doing before you sign in: the Home Screen app keeps its own
               session, so installing first saves you signing in twice.
             </p>
+
+            {/* Last, so the arrow sits as close as the layout allows to the
+                toolbar it is pointing at. */}
+            <div className="mt-7">
+              <ToolbarHint edge={toolbarEdge} />
+            </div>
           </>
         )}
 
