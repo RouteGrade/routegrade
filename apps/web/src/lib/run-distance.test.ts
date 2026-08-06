@@ -192,3 +192,92 @@ describe("applyFix · a realistic 5 km run", () => {
     expect(Math.abs(state.distanceM - truth) / truth).toBeLessThan(0.001);
   });
 });
+
+describe("applyFix · rides", () => {
+  /**
+   * Founder request, 2026-08-05: biking alongside running. The speed guard was
+   * sized for a runner (10 m/s = 36 km/h), which an ordinary bike descent
+   * exceeds — so every fix of one was rejected as "implausible".
+   *
+   * These pin both halves: rides are believed at bike speeds, and runs are NOT
+   * loosened along with them.
+   */
+
+  /** One fix per second at a constant speed, in m/s. */
+  function atSpeed(count: number, mps: number): Fix[] {
+    return Array.from({ length: count }, (_, i) => ({
+      coord: northOf(START, i * mps),
+      accuracyM: 8,
+      timeMs: i * 1000,
+    }));
+  }
+
+  function feedAs(fixes: Fix[], activity: "run" | "ride"): DistanceState {
+    return fixes.reduce(
+      (state, fix) => applyFix(state, fix, activity).state,
+      initialDistanceState(),
+    );
+  }
+
+  it("counts a 45 km/h descent as a ride", () => {
+    // 12.5 m/s over 60 s = 750 m. The old constant recorded none of it.
+    // Tolerance is 1%: `northOf` uses a flat degrees-to-metres constant while
+    // the accumulator uses haversine, so they differ by ~0.1% over this span.
+    const state = feedAs(atSpeed(61, 12.5), "ride");
+    expect(state.distanceM).toBeGreaterThan(750 * 0.99);
+    expect(state.distanceM).toBeLessThan(750 * 1.01);
+  });
+
+  it("is the regression: the same descent measured as a run loses almost all of it", () => {
+    // Not an assertion about desired behaviour — it documents the bug being
+    // fixed, and pins that a RUN still refuses to believe 45 km/h.
+    const asRun = feedAs(atSpeed(61, 12.5), "run");
+    const asRide = feedAs(atSpeed(61, 12.5), "ride");
+    expect(asRun.distanceM).toBe(0);
+    expect(asRide.distanceM).toBeGreaterThan(700);
+  });
+
+  it("still rejects a GPS teleport on a ride", () => {
+    // 5 km in one second is ~5000 m/s — a glitch at any activity.
+    const teleport: Fix[] = [
+      { coord: START, accuracyM: 8, timeMs: 0 },
+      { coord: northOf(START, 5000), accuracyM: 8, timeMs: 1000 },
+    ];
+    expect(feedAs(teleport, "ride").distanceM).toBe(0);
+  });
+
+  it("believes a fast descent but not an impossible one", () => {
+    // 25 m/s (90 km/h) is a real descent; 35 m/s (126 km/h) is not a bicycle.
+    expect(feedAs(atSpeed(11, 25), "ride").distanceM).toBeGreaterThan(0);
+    expect(feedAs(atSpeed(11, 35), "ride").distanceM).toBe(0);
+  });
+
+  it("leaves ordinary riding — well under either cap — identical either way", () => {
+    // 7 m/s is ~25 km/h, below the run cap too, so the split must not have
+    // changed anything for speeds both activities already accepted.
+    const fixes = atSpeed(31, 7);
+    expect(feedAs(fixes, "ride").distanceM).toBeCloseTo(
+      feedAs(fixes, "run").distanceM,
+      6,
+    );
+  });
+
+  it("defaults to run when no activity is passed", () => {
+    // Every existing caller and every stored run must keep its behaviour.
+    const fixes = atSpeed(61, 12.5);
+    expect(feed(fixes).distanceM).toBe(feedAs(fixes, "run").distanceM);
+  });
+
+  it("does not loosen the jitter floor for rides — a parked bike stays at zero", () => {
+    // A genuine wobble OSCILLATES around a point; it does not creep. (Steady
+    // 1 m steps would rightly accumulate: the anchor holds through a rejection
+    // precisely so slow real movement is deferred rather than discarded.)
+    const parked: Fix[] = Array.from({ length: 40 }, (_, i) => ({
+      coord: northOf(START, i % 2 === 0 ? 0 : 1.5),
+      accuracyM: 8,
+      timeMs: i * 1000,
+    }));
+    expect(feedAs(parked, "ride").distanceM).toBe(0);
+    expect(feedAs(parked, "run").distanceM).toBe(0);
+  });
+});
