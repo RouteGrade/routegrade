@@ -183,7 +183,7 @@ export function GradeFeedback({
               setSaved(false);
               setDraft((d) => ({ ...d, comment: e.target.value }));
             }}
-            className="w-full rounded-control border border-hairline bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-faint focus:border-accent"
+            className="w-full rounded-control border border-hairline bg-canvas px-3 py-2 text-base text-ink outline-none transition-colors placeholder:text-faint focus:border-accent"
             placeholder="e.g. the last kilometre is all uphill"
           />
 
