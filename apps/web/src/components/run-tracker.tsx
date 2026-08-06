@@ -196,11 +196,13 @@ export default function RunTracker({
 
     // Accumulation lives in lib/run-distance.ts so it can be tested — see the
     // note there on why a rejected fix must never become the anchor.
-    const { state, verdict } = applyFix(distanceStateRef.current, {
-      coord,
-      accuracyM,
-      timeMs: nowMs,
-    });
+    // Activity matters here: the implausible-speed guard is 36 km/h for a run,
+    // which an ordinary bike descent exceeds. See lib/run-distance.ts.
+    const { state, verdict } = applyFix(
+      distanceStateRef.current,
+      { coord, accuracyM, timeMs: nowMs },
+      activity,
+    );
     distanceStateRef.current = state;
     // A rejected fix contributes nothing downstream either: no trace point, no
     // pace sample, no split check.
