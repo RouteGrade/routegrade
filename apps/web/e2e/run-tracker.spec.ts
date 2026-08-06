@@ -118,13 +118,21 @@ test.describe("run tracker · simulate mode", () => {
     await planFixtureRoute(page);
     await startRunAndPassCountdown(page);
 
-    // Nothing has moved yet.
-    expect(await readDistanceKm(page)).toBe(0);
+    // Baseline rather than an assertion that this is exactly 0.
+    //
+    // `startRunAndPassCountdown` steps the mocked clock a second at a time
+    // until the run goes live, and the simulator's own interval starts the
+    // moment it does — so the final step of that loop can already have moved
+    // the runner a few metres. Asserting 0 here was asserting something the
+    // test does not control: it passed on timing luck and failed under load
+    // with "Expected 0, received 0.01". What the test is actually about is that
+    // the stats MOVE, so measure the growth instead.
+    const startKm = await readDistanceKm(page);
 
     // ~130 m of simulated travel (enough for distance, current + avg pace).
     await advanceRun(page, 40_000);
 
-    await expect.poll(() => readDistanceKm(page)).toBeGreaterThan(0);
+    await expect.poll(() => readDistanceKm(page)).toBeGreaterThan(startKm);
 
     // Moving-time clock is running.
     await expect(page.locator("dd").filter({ hasText: /^\d+:\d{2}$/ }).first()).toBeVisible();
