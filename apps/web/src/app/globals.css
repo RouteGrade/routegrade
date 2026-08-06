@@ -63,6 +63,23 @@ body {
   -webkit-font-smoothing: antialiased;
   /* The tab bar and full-bleed map own the gestures — never rubber-band. */
   overscroll-behavior: none;
+  /* Installed to the home screen, this is the app. iOS flashes a grey box
+     behind every tap target by default, which nothing native does and which
+     reads as "web page" more loudly than any amount of styling. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Long-pressing a control on iOS raises the text-selection callout ("Copy",
+   "Look Up") over the button you meant to press. Suppressed on controls only —
+   addresses, route names and split times stay selectable, because a runner
+   copying their own data out is a thing we should not be preventing. */
+button,
+[role="radio"],
+[role="tab"],
+label {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* --- Type primitives -------------------------------------------------------

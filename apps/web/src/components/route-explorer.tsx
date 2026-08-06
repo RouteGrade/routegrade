@@ -604,7 +604,7 @@ export default function RouteExplorer({
                   setPinnedStart(null);
                 }}
                 placeholder="Start address"
-                className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none"
               />
               <button
                 type="button"
@@ -631,7 +631,7 @@ export default function RouteExplorer({
                   value={stop}
                   onChange={(e) => setStop(i, e.target.value)}
                   placeholder={`Stop ${i + 1}`}
-                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
                 {/* Up/down rather than drag: this is a touch-first app, and
                     HTML5 drag-and-drop does not fire on touch at all. Buttons
@@ -676,7 +676,7 @@ export default function RouteExplorer({
               value={endAddr}
               onChange={(e) => setEndAddr(e.target.value)}
               placeholder="End address"
-              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+              className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none"
             />
             <div className="flex items-center justify-between gap-2">
               <button
@@ -782,7 +782,7 @@ export default function RouteExplorer({
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="My route"
                   maxLength={120}
-                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+                  className="h-10 w-full rounded-control border border-hairline bg-raised px-3 text-base text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
                 <div className="flex gap-2">
                   <button

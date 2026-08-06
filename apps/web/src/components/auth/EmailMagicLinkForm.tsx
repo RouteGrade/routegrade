@@ -77,7 +77,7 @@ export function EmailMagicLinkForm({ next }: { next?: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="runner@example.com"
-          className="h-11 w-full rounded-control border border-hairline bg-raised px-3 text-sm text-ink placeholder:text-faint outline-none transition focus:border-accent"
+          className="h-11 w-full rounded-control border border-hairline bg-raised px-3 text-base text-ink placeholder:text-faint outline-none transition focus:border-accent"
         />
       </div>
       <button
